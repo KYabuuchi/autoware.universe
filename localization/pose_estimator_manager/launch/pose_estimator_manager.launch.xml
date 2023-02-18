@@ -2,9 +2,14 @@
 <launch>
 
   <node pkg="pose_estimator_manager" exec="pose_estimator_manager" name="pose_estimator_manager" output="screen">
-        <remap from="/input/pointcloud" to="/sensing/lidar/top/pointcloud_raw"/>
+        <remap from="/input/pointcloud" to="/sensing/lidar/top/outlier_filtered/pointcloud"/>
+        <remap from="/output/pointcloud" to="/sensing/lidar/top/outlier_filtered/pointcloud/relay"/>
+
         <remap from="/input/compressed_image" to="/sensing/camera/traffic_light/image_raw/compressed"/>
+        <remap from="/output/compressed_image" to="/sensing/camera/traffic_light/image_raw/compressed/relay"/>
+
         <remap from="/input/navpvt" to="/sensing/gnss/ublox/navpvt"/>
+        <remap from="/output/navpvt" to="/sensing/gnss/ublox/navpvt/relay"/>
   </node>
 
 </launch>

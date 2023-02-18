@@ -10,12 +10,14 @@ PoseEstimatorManager::PoseEstimatorManager() : Node("pose_estimator_manager"), p
   auto on_compressed_image = std::bind(&PoseEstimatorManager::on_compressed_image, this, _1);
   auto on_navpvt = std::bind(&PoseEstimatorManager::on_navpvt, this, _1);
 
-  sub_pointcloud_ = create_subscription<PointCloud2>("/input/pointcloud", 10, on_pointcloud);
+  sub_pointcloud_ =
+    create_subscription<PointCloud2>("/input/pointcloud", rclcpp::SensorDataQoS(), on_pointcloud);
   sub_compressed_image_ =
     create_subscription<CompressedImage>("/input/compressed_image", 10, on_compressed_image);
   sub_navpvt_ = create_subscription<NavPVT>("/input/navpvt", 10, on_navpvt);
 
-  pub_pointcloud_ = create_publisher<PointCloud2>("/output/pointcloud", 10);
+  pub_pointcloud_ =
+    create_publisher<PointCloud2>("/output/pointcloud", rclcpp::SensorDataQoS().keep_last(10));
   pub_compressed_image_ = create_publisher<CompressedImage>("/output/compressed_image", 10);
   pub_navpvt_ = create_publisher<NavPVT>("/output/navpvt", 10);
 
