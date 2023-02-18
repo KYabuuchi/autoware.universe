@@ -11,5 +11,9 @@
 
       <arg name="param_file" value="$(var ndt_scan_matcher_param_path)"/>
     </include>
+
+    <!-- pose_estimator_manager -->
+    <include file="$(find-pkg-share pose_estimator_manager)/launch/pose_estimator_manager.launch.xml">
+    </include>
   </group>
 </launch>
