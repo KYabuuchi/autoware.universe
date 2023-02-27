@@ -8,17 +8,20 @@ PoseEstimatorManager::PoseEstimatorManager() : Node("pose_estimator_manager"), p
   using std::placeholders::_2;
   auto on_pointcloud = std::bind(&PoseEstimatorManager::on_pointcloud, this, _1);
   auto on_compressed_image = std::bind(&PoseEstimatorManager::on_compressed_image, this, _1);
+  auto on_image = std::bind(&PoseEstimatorManager::on_image, this, _1);
   auto on_navpvt = std::bind(&PoseEstimatorManager::on_navpvt, this, _1);
 
   sub_pointcloud_ =
     create_subscription<PointCloud2>("/input/pointcloud", rclcpp::SensorDataQoS(), on_pointcloud);
   sub_compressed_image_ =
     create_subscription<CompressedImage>("/input/compressed_image", 10, on_compressed_image);
+  sub_image_ = create_subscription<Image>("/input/image", 10, on_image);
   sub_navpvt_ = create_subscription<NavPVT>("/input/navpvt", 10, on_navpvt);
 
   pub_pointcloud_ =
     create_publisher<PointCloud2>("/output/pointcloud", rclcpp::SensorDataQoS().keep_last(10));
   pub_compressed_image_ = create_publisher<CompressedImage>("/output/compressed_image", 10);
+  pub_image_ = create_publisher<Image>("/output/image", 10);
   pub_navpvt_ = create_publisher<NavPVT>("/output/navpvt", 10);
 
   // Service definition
@@ -37,6 +40,13 @@ void PoseEstimatorManager::on_pointcloud(PointCloud2::ConstSharedPtr msg)
 {
   if (publish_ndt_) {
     pub_pointcloud_->publish(*msg);
+  }
+}
+
+void PoseEstimatorManager::on_image(Image::ConstSharedPtr msg)
+{
+  if (!publish_ndt_) {
+    pub_image_->publish(*msg);
   }
 }
 

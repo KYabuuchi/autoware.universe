@@ -8,6 +8,9 @@
         <remap from="/input/compressed_image" to="/sensing/camera/traffic_light/image_raw/compressed"/>
         <remap from="/output/compressed_image" to="/sensing/camera/traffic_light/image_raw/compressed/relay"/>
 
+        <remap from="/input/image" to="/sensing/camera/undistorted/image_raw"/>
+        <remap from="/output/image" to="/sensing/camera/undistorted/image_raw/relay"/>
+
         <remap from="/input/navpvt" to="/sensing/gnss/ublox/navpvt"/>
         <remap from="/output/navpvt" to="/sensing/gnss/ublox/navpvt/relay"/>
   </node>
