@@ -2,17 +2,22 @@
 <launch>
 
   <node pkg="pose_estimator_manager" exec="pose_estimator_manager" name="pose_estimator_manager" output="screen">
-        <remap from="/input/pointcloud" to="/sensing/lidar/top/outlier_filtered/pointcloud"/>
-        <remap from="/output/pointcloud" to="/sensing/lidar/top/outlier_filtered/pointcloud/relay"/>
+  </node>
 
-        <remap from="/input/compressed_image" to="/sensing/camera/traffic_light/image_raw/compressed"/>
-        <remap from="/output/compressed_image" to="/sensing/camera/traffic_light/image_raw/compressed/relay"/>
+  <node pkg="pose_estimator_manager" exec="pcdless_sub_manager" name="pcdless_sub_manager" output="screen">
+        <remap from="/enable_srv" to="/pcdless_enable_srv"/>
 
-        <remap from="/input/image" to="/sensing/camera/undistorted/image_raw"/>
-        <remap from="/output/image" to="/sensing/camera/undistorted/image_raw/relay"/>
-
+        <remap from="/input/image" to="/sensing/camera/traffic_light/image_raw"/>
+        <remap from="/output/image" to="/sensing/camera/traffic_light/image_raw/relay"/>
         <remap from="/input/navpvt" to="/sensing/gnss/ublox/navpvt"/>
         <remap from="/output/navpvt" to="/sensing/gnss/ublox/navpvt/relay"/>
+  </node>
+
+  <node pkg="pose_estimator_manager" exec="ndt_sub_manager" name="ndt_sub_manager" output="screen">
+        <remap from="/enable_srv" to="/ndt_enable_srv"/>
+
+        <remap from="/input/pointcloud" to="/sensing/lidar/top/outlier_filtered/pointcloud"/>
+        <remap from="/output/pointcloud" to="/sensing/lidar/top/outlier_filtered/pointcloud/relay"/>
   </node>
 
 </launch>

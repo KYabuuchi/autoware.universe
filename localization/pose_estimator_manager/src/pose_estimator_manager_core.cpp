@@ -1,72 +1,38 @@
-#include "pose_estimator_manager.hpp"
+#include "pose_estimator_manager/pose_estimator_manager.hpp"
 
-namespace pose_estimator
+namespace multi_pose_estimator
 {
-PoseEstimatorManager::PoseEstimatorManager() : Node("pose_estimator_manager"), publish_ndt_(true)
+PoseEstimatorManager::PoseEstimatorManager() : Node("pose_estimator_manager")
 {
   using std::placeholders::_1;
   using std::placeholders::_2;
-  auto on_pointcloud = std::bind(&PoseEstimatorManager::on_pointcloud, this, _1);
-  auto on_compressed_image = std::bind(&PoseEstimatorManager::on_compressed_image, this, _1);
-  auto on_image = std::bind(&PoseEstimatorManager::on_image, this, _1);
-  auto on_navpvt = std::bind(&PoseEstimatorManager::on_navpvt, this, _1);
 
-  sub_pointcloud_ =
-    create_subscription<PointCloud2>("/input/pointcloud", rclcpp::SensorDataQoS(), on_pointcloud);
-  sub_compressed_image_ =
-    create_subscription<CompressedImage>("/input/compressed_image", 10, on_compressed_image);
-  sub_image_ = create_subscription<Image>("/input/image", 10, on_image);
-  sub_navpvt_ = create_subscription<NavPVT>("/input/navpvt", 10, on_navpvt);
-
-  pub_pointcloud_ =
-    create_publisher<PointCloud2>("/output/pointcloud", rclcpp::SensorDataQoS().keep_last(10));
-  pub_compressed_image_ = create_publisher<CompressedImage>("/output/compressed_image", 10);
-  pub_image_ = create_publisher<Image>("/output/image", 10);
-  pub_navpvt_ = create_publisher<NavPVT>("/output/navpvt", 10);
-
-  // Service definition
+  // Service server
   auto on_service = std::bind(&PoseEstimatorManager::on_service, this, _1, _2);
-  switch_service_ = create_service<SetBool>("/toggle_ndt", on_service);
-}
+  switch_service_server_ = create_service<SetBool>("/toggle_ndt", on_service);
 
-void PoseEstimatorManager::on_navpvt(NavPVT::ConstSharedPtr msg)
-{
-  if (!publish_ndt_) {
-    pub_navpvt_->publish(*msg);
-  }
-}
-
-void PoseEstimatorManager::on_pointcloud(PointCloud2::ConstSharedPtr msg)
-{
-  if (publish_ndt_) {
-    pub_pointcloud_->publish(*msg);
-  }
-}
-
-void PoseEstimatorManager::on_image(Image::ConstSharedPtr msg)
-{
-  if (!publish_ndt_) {
-    pub_image_->publish(*msg);
-  }
-}
-
-void PoseEstimatorManager::on_compressed_image(CompressedImage::ConstSharedPtr msg)
-{
-  if (!publish_ndt_) {
-    pub_compressed_image_->publish(*msg);
-  }
+  // Service client
+  service_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+  clients_.emplace(
+    "ndt", std::make_shared<ManagerClient>(this, "ndt_enable_srv", service_callback_group_));
+  clients_.emplace(
+    "pcdless",
+    std::make_shared<ManagerClient>(this, "pcdless_enable_srv", service_callback_group_));
 }
 
 void PoseEstimatorManager::on_service(
   SetBool::Request::ConstSharedPtr request, SetBool::Response::SharedPtr response)
 {
+  RCLCPP_INFO_STREAM(get_logger(), "ENTER: toggle pose estimator");
+  if (request->data) {
+    clients_.at("ndt")->enable();
+    clients_.at("pcdless")->disable();
+  } else {
+    clients_.at("ndt")->disable();
+    clients_.at("pcdless")->enable();
+  }
   response->success = true;
-
-  publish_ndt_ = request->data;
-  if (publish_ndt_)
-    RCLCPP_INFO_STREAM(get_logger(), "NDT mode is enabled");
-  else
-    RCLCPP_INFO_STREAM(get_logger(), "PCD-less mode is enabled");
+  RCLCPP_INFO_STREAM(get_logger(), "EXIT: toggle pose estimator");
 }
 
-}  // namespace pose_estimator
+}  // namespace multi_pose_estimator
