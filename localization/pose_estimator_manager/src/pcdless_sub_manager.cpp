@@ -19,10 +19,10 @@ public:
     auto on_image = std::bind(&PcdlessSubManager::on_image, this, _1);
     auto on_navpvt = std::bind(&PcdlessSubManager::on_navpvt, this, _1);
 
-    sub_image_ = create_subscription<Image>("/input/image", rclcpp::SensorDataQoS(), on_image);
-    sub_navpvt_ = create_subscription<NavPVT>("/input/navpvt", rclcpp::SensorDataQoS(), on_navpvt);
-    pub_image_ = create_publisher<Image>("/output/image", rclcpp::SensorDataQoS().keep_last(10));
-    pub_navpvt_ = create_publisher<NavPVT>("/output/navpvt", rclcpp::SensorDataQoS().keep_last(10));
+    sub_image_ = create_subscription<Image>("/input/image", 5, on_image);
+    sub_navpvt_ = create_subscription<NavPVT>("/input/navpvt", 5, on_navpvt);
+    pub_image_ = create_publisher<Image>("/output/image", 5);
+    pub_navpvt_ = create_publisher<NavPVT>("/output/navpvt", 5);
   }
 
 protected:

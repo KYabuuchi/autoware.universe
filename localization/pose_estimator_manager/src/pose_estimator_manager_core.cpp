@@ -14,10 +14,10 @@ PoseEstimatorManager::PoseEstimatorManager() : Node("pose_estimator_manager")
   // Service client
   service_callback_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
   clients_.emplace(
-    "ndt", std::make_shared<ManagerClient>(this, "ndt_enable_srv", service_callback_group_));
+    "ndt", std::make_shared<ManagerClient>(this, "/ndt_enable_srv", service_callback_group_));
   clients_.emplace(
     "pcdless",
-    std::make_shared<ManagerClient>(this, "pcdless_enable_srv", service_callback_group_));
+    std::make_shared<ManagerClient>(this, "/pcdless_enable_srv", service_callback_group_));
 }
 
 void PoseEstimatorManager::on_service(
