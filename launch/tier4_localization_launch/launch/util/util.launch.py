@@ -29,12 +29,27 @@ def launch_setup(context, *args, **kwargs):
         with open(LaunchConfiguration(param_path).perform(context), "r") as f:
             return yaml.safe_load(f)["/**"]["ros__parameters"]
 
+    drop_component = ComposableNode(
+        package="pointcloud_preprocessor",
+        plugin="pointcloud_preprocessor::DropFilterComponent",
+        name="drop_filter",
+        remappings=[
+            ("input", LaunchConfiguration("input_pointcloud")),
+            ("output", "dropped/pointcloud"),
+        ],
+        parameters=[
+            {
+                "drop_rate": 3,
+            }
+        ],
+        extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
+    )
     crop_box_component = ComposableNode(
         package="pointcloud_preprocessor",
         plugin="pointcloud_preprocessor::CropBoxFilterComponent",
         name="crop_box_filter_measurement_range",
         remappings=[
-            ("input", LaunchConfiguration("input_pointcloud")),
+            ("input", "dropped/pointcloud"),
             ("output", "measurement_range/pointcloud"),
         ],
         parameters=[
@@ -66,6 +81,7 @@ def launch_setup(context, *args, **kwargs):
     )
 
     composable_nodes = [
+        drop_component,
         crop_box_component,
         voxel_grid_downsample_component,
         random_downsample_component,
