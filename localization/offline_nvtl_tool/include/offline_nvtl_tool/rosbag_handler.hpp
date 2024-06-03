@@ -8,7 +8,7 @@
 #include <rosbag2_storage/storage_options.hpp>
 
 template <typename T>
-T decode_with_type(std::shared_ptr<rosbag2_storage::SerializedBagMessage> bag_message)
+T decode_with_type(const std::shared_ptr<const rosbag2_storage::SerializedBagMessage> bag_message)
 {
   T msg;
   rclcpp::Serialization<T> serialization;
@@ -27,6 +27,8 @@ public:
 
     reader_ = std::make_unique<rosbag2_cpp::readers::SequentialReader>();
     reader_->open(storage_options, converter_options);
+
+    reader_->reset_filter();
   }
 
   bool has_next() const { return reader_->has_next(); }
