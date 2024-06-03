@@ -1,6 +1,8 @@
 #pragma once
 
+#include <localization_util/util_func.hpp>
 #include <ndt_scan_matcher/hyper_parameters.hpp>
+#include <tier4_autoware_utils/transform/transforms.hpp>
 
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -34,11 +36,21 @@ public:
   }
 
   double get_nvtl(
-    const sensor_msgs::msg::PointCloud2 &,
-    const geometry_msgs::msg::PoseWithCovarianceStamped &) const
+    const sensor_msgs::msg::PointCloud2 & source_cloud_msg,
+    const geometry_msgs::msg::Pose & pose_msg) const
   {
-    pcl::PointCloud<PointSource> source_cloud;
-    return ndt_ptr_->calculateNearestVoxelTransformationLikelihood(source_cloud);
+    pcl::PointCloud<PointSource> cloud_in_base_frame;
+    pcl::fromROSMsg(source_cloud_msg, cloud_in_base_frame);
+
+    // const Eigen::Matrix4f map_to_base_matrix =
+    //   pose_to_affine3d(pose_msg).inverse().matrix().cast<float>();
+    const Eigen::Matrix4f map_to_base_matrix = pose_to_matrix4f(pose_msg);
+
+    pcl::PointCloud<PointSource> cloud_in_map_frame;
+    tier4_autoware_utils::transformPointCloud(
+      cloud_in_base_frame, cloud_in_map_frame, map_to_base_matrix);
+
+    return ndt_ptr_->calculateNearestVoxelTransformationLikelihood(cloud_in_map_frame);
   }
 
 private:

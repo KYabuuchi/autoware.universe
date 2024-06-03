@@ -17,8 +17,11 @@
 
 #include <rclcpp/logging.hpp>
 #include <rclcpp/time.hpp>
+#include <tier4_autoware_utils/geometry/geometry.hpp>
 
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+
+#include <tf2_ros/transform_broadcaster.h>
 
 #include <iostream>
 #include <map>
@@ -31,9 +34,11 @@ public:
   using PoseCovStamped = geometry_msgs::msg::PoseWithCovarianceStamped;
   using Pose = geometry_msgs::msg::Pose;
 
-  OfflineNvtlTool() : Node("offline_nvtl_tool")
+  OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_(*this)
   {
-    sensor_in_pose_frame_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("points", 10);
+    map_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
+      "map", rclcpp::QoS(1).transient_local());
+    lidar_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar", 10);
 
     const std::string input_rosbag_path = this->declare_parameter<std::string>("input_rosbag_path");
 
@@ -43,6 +48,9 @@ public:
     const auto map_msg = extract_map_pointcloud(reader);
     NdtInterface ndt{this};
     ndt.set_pointcloud_map(map_msg);
+    {
+      map_points_pub_->publish(map_msg);
+    }
 
     // Iterate all pose & point cloud
     const auto associated_sensor_and_pose = extract_pointcloud_with_pose(reader);
@@ -50,13 +58,48 @@ public:
     RCLCPP_INFO_STREAM(
       this->get_logger(), "Start processing: " << associated_sensor_and_pose.size());
 
-    // Compute normatl NVTL
-    // TODO:
+    // Publish tf
+    {
+      const auto msg = associated_sensor_and_pose.front();
+      geometry_msgs::msg::PoseStamped pose_stamped_msg;
+      pose_stamped_msg.header.stamp = this->get_clock()->now();
+      pose_stamped_msg.header.frame_id = "map";
+      pose_stamped_msg.pose = msg.pose;
+      tf2_broadcaster_.sendTransform(
+        tier4_autoware_utils::pose2transform(pose_stamped_msg, "viewer"));
+    }
+
+    rclcpp::Rate loop_rate(10);  // 10 fps
+
+    // Compute normal NVTL
+    for (const auto & lidar_and_pose : associated_sensor_and_pose) {
+      // Publish tf
+      {
+        geometry_msgs::msg::PoseStamped pose_stamped_msg;
+        pose_stamped_msg.header.stamp = this->get_clock()->now();
+        pose_stamped_msg.header.frame_id = "map";
+        pose_stamped_msg.pose = lidar_and_pose.pose;
+        tf2_broadcaster_.sendTransform(
+          tier4_autoware_utils::pose2transform(pose_stamped_msg, "base_link"));
+      }
+      {
+        PointCloud2 msg_with_now_stamp = lidar_and_pose.pointcloud;
+        msg_with_now_stamp.header.stamp = this->get_clock()->now();
+        lidar_points_pub_->publish(msg_with_now_stamp);
+      }
+
+      const double nvtl = ndt.get_nvtl(lidar_and_pose.pointcloud, lidar_and_pose.pose);
+
+      RCLCPP_INFO_STREAM(this->get_logger(), "NVTL: " << nvtl);
+
+      if (!rclcpp::ok()) {
+        break;
+      }
+      loop_rate.sleep();
+    }
   }
 
 private:
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr sensor_in_pose_frame_pub_;
-
   struct PointCloudWithPose
   {
     PointCloud2 pointcloud;
@@ -77,7 +120,7 @@ private:
   std::vector<PointCloudWithPose> extract_pointcloud_with_pose(const RosbagReader & reader)
   {
     // header.stamp.nanosec -> msg
-    std::unordered_map<uint32_t, PointCloud2> point_cloud_map;
+    std::vector<PointCloud2> point_cloud_vector;
     std::unordered_map<uint32_t, Pose> pose_map;
 
     // Extract all pose messages
@@ -90,30 +133,35 @@ private:
       }
       if (msg->topic_name == "/localization/util/downsample/pointcloud") {
         const PointCloud2 point_cloud = decode_with_type<PointCloud2>(msg);
-        point_cloud_map.emplace(point_cloud.header.stamp.nanosec, point_cloud);
+        point_cloud_vector.push_back(point_cloud);
       }
     }
     RCLCPP_INFO_STREAM(this->get_logger(), "Extracted " << pose_map.size() << " poses");
-    RCLCPP_INFO_STREAM(this->get_logger(), "Extracted " << point_cloud_map.size() << " pointcloud");
+    RCLCPP_INFO_STREAM(
+      this->get_logger(), "Extracted " << point_cloud_vector.size() << " pointcloud");
 
     // Associated point cloud with pose
     std::vector<PointCloudWithPose> point_cloud_with_pose_array;
 
-    for (const auto [stamp, pose] : pose_map) {
-      if (point_cloud_map.find(stamp) != point_cloud_map.end()) {
-        point_cloud_with_pose_array.push_back({point_cloud_map[stamp], pose});
+    for (const auto & point_cloud : point_cloud_vector) {
+      const uint32_t nanosec = point_cloud.header.stamp.nanosec;
+      if (pose_map.find(nanosec) != pose_map.end()) {
+        point_cloud_with_pose_array.push_back({point_cloud, pose_map.at(nanosec)});
       }
     }
 
     return point_cloud_with_pose_array;
   }
+
+private:
+  rclcpp::Publisher<PointCloud2>::SharedPtr map_points_pub_;
+  rclcpp::Publisher<PointCloud2>::SharedPtr lidar_points_pub_;
+  tf2_ros::TransformBroadcaster tf2_broadcaster_;
 };
 
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<OfflineNvtlTool>();
-  rclcpp::spin(node);
-
+  std::make_shared<OfflineNvtlTool>();
   return 0;
 }
