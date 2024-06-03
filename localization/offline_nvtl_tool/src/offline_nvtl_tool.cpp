@@ -12,35 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "offline_nvtl_tool/ndt.hpp"
 #include "offline_nvtl_tool/rosbag_handler.hpp"
 
 #include <rclcpp/logging.hpp>
 #include <rclcpp/time.hpp>
 
-#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 
 #include <iostream>
+#include <memory>
 
-int main(int argc, char * argv[])
+class OfflineNvtlTool : public rclcpp::Node
 {
-  if (argc != 2) {
-    std::cerr << "rosbag path is required" << std::endl;
-    return 1;
-  }
+public:
+  OfflineNvtlTool() : Node("offline_nvtl_tool")
+  {
+    const std::string input_rosbag_path = this->declare_parameter<std::string>("input_rosbag_path");
 
-  const auto reader = RosbagReader(argv[1]);
+    const auto reader = RosbagReader(input_rosbag_path);
 
-  using PoseStamped = geometry_msgs::msg::PoseStamped;
+    // Create NDT
+    NdtInterface ndt{this};
 
-  while (reader.has_next()) {
-    std::shared_ptr<rosbag2_storage::SerializedBagMessage> msg = reader.read_next();
+    using PointCloud2 = sensor_msgs::msg::PointCloud2;
 
-    if (msg->topic_name == "/localization/pose_estimator/pose_with_covariance") {
-      const PoseStamped pose = decode_with_type<PoseStamped>(msg);
-      const auto position = pose.pose.position;
+    while (reader.has_next()) {
+      std::shared_ptr<rosbag2_storage::SerializedBagMessage> msg = reader.read_next();
 
-      std::cout << pose.header.stamp.sec << ": " << position.x << " " << position.y << " "
-                << position.z << std::endl;
+      if (msg->topic_name == "/map/pointcloud_map") {
+        const PointCloud2 map_msg = decode_with_type<PointCloud2>(msg);
+        ndt.set_pointcloud_map(map_msg);
+        break;
+      }
+    }
+
+    // Iterate all poses
+
+    using PoseCovStamped = geometry_msgs::msg::PoseWithCovarianceStamped;
+    while (reader.has_next()) {
+      std::shared_ptr<rosbag2_storage::SerializedBagMessage> msg = reader.read_next();
+
+      if (msg->topic_name == "/localization/pose_estimator/pose_with_covariance") {
+        const PoseCovStamped pose = decode_with_type<PoseCovStamped>(msg);
+        const auto position = pose.pose.pose.position;
+
+        std::cout << pose.header.stamp.sec << ": " << position.x << " " << position.y << " "
+                  << position.z << std::endl;
+      }
     }
   }
+};
+
+int main(int argc, char ** argv)
+{
+  rclcpp::init(argc, argv);
+  auto node = std::make_shared<OfflineNvtlTool>();
+  rclcpp::spin(node);
+
+  return 0;
 }
