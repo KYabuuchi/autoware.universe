@@ -29,6 +29,7 @@ OfflineNvtlTool::OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_
   map_points_pub_ =
     this->create_publisher<sensor_msgs::msg::PointCloud2>("map", rclcpp::QoS(1).transient_local());
   lidar_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar", 10);
+  objects_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("objects", 10);
 
   const std::string input_rosbag_path = this->declare_parameter<std::string>("input_rosbag_path");
 
@@ -61,24 +62,26 @@ OfflineNvtlTool::OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_
   rclcpp::Rate loop_rate(10);  // 10 fps
 
   // Compute normal NVTL
-  for (const auto & lidar_and_pose : associated_sensor_and_pose) {
+  for (const auto & sensor_and_pose : associated_sensor_and_pose) {
     // Publish tf
     {
       geometry_msgs::msg::PoseStamped pose_stamped_msg;
       pose_stamped_msg.header.stamp = this->get_clock()->now();
       pose_stamped_msg.header.frame_id = "map";
-      pose_stamped_msg.pose = lidar_and_pose.pose;
+      pose_stamped_msg.pose = sensor_and_pose.pose;
       tf2_broadcaster_.sendTransform(
         tier4_autoware_utils::pose2transform(pose_stamped_msg, "base_link"));
     }
     // Publish lidar pointcloud
     {
-      PointCloud2 msg_with_now_stamp = lidar_and_pose.pointcloud;
+      PointCloud2 msg_with_now_stamp = sensor_and_pose.pointcloud;
       msg_with_now_stamp.header.stamp = this->get_clock()->now();
       lidar_points_pub_->publish(msg_with_now_stamp);
     }
+    // Publish objects
+    publish_objects(sensor_and_pose.objects, "base_link");
 
-    const double nvtl = ndt.get_nvtl(lidar_and_pose.pointcloud, lidar_and_pose.pose);
+    const double nvtl = ndt.get_nvtl(sensor_and_pose.pointcloud, sensor_and_pose.pose);
 
     RCLCPP_INFO_STREAM(this->get_logger(), "NVTL: " << nvtl);
 
