@@ -30,6 +30,7 @@ OfflineNvtlTool::OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_
     this->create_publisher<sensor_msgs::msg::PointCloud2>("map", rclcpp::QoS(1).transient_local());
   lidar_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar", 10);
   objects_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("objects", 10);
+  objects_marker_pub_ = this->create_publisher<MarkerArray>("objects_marker", 10);
 
   const std::string input_rosbag_path = this->declare_parameter<std::string>("input_rosbag_path");
 

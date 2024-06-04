@@ -19,6 +19,14 @@ void NdtInterface::set_pointcloud_map(const sensor_msgs::msg::PointCloud2 & map_
   pcl::fromROSMsg(map_points_msg, *map_points);
 
   ndt_ptr_->setInputTarget(map_points);
+
+  // NOTE: We need to call align() once before calling
+  // calculateNearestVoxelTransformationLikelihood() to initialize the some internal variables.
+  {
+    pcl::PointCloud<PointSource> output_cloud;
+    ndt_ptr_->setInputSource(map_points);
+    ndt_ptr_->align(output_cloud, Eigen::Matrix4f::Identity());
+  }
 }
 
 double NdtInterface::get_nvtl(
@@ -29,16 +37,6 @@ double NdtInterface::get_nvtl(
   pcl::fromROSMsg(source_cloud_msg, cloud_in_base_frame);
 
   const Eigen::Matrix4f map_to_base_matrix = pose_to_matrix4f(pose_msg);
-
-  // NOTE: We need to call align() once before calling
-  // calculateNearestVoxelTransformationLikelihood() to initialize the some internal variables.
-  static bool first_ndt = true;
-  if (first_ndt) {
-    first_ndt = false;
-    pcl::PointCloud<PointSource> output_cloud;
-    ndt_ptr_->setInputSource(cloud_in_base_frame.makeShared());
-    ndt_ptr_->align(output_cloud, map_to_base_matrix);
-  }
 
   pcl::PointCloud<PointSource> cloud_in_map_frame;
   tier4_autoware_utils::transformPointCloud(

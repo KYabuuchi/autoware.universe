@@ -6,6 +6,7 @@
 #include <autoware_auto_perception_msgs/msg/detected_objects.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -17,6 +18,8 @@ public:
   using PointCloud2 = sensor_msgs::msg::PointCloud2;
   using PoseCovStamped = geometry_msgs::msg::PoseWithCovarianceStamped;
   using Pose = geometry_msgs::msg::Pose;
+  using Marker = visualization_msgs::msg::Marker;
+  using MarkerArray = visualization_msgs::msg::MarkerArray;
 
   OfflineNvtlTool();
 
@@ -88,6 +91,7 @@ private:
 
   void publish_objects(const DetectedObjects & objects, const std::string & frame_id)
   {
+    // Publish objects as point cloud
     pcl::PointCloud<pcl::PointXYZ> object_point_cloud;
     for (const auto & object : objects.objects) {
       const auto position = object.kinematics.pose_with_covariance.pose.position;
@@ -99,11 +103,43 @@ private:
     object_points_msg.header.stamp = this->get_clock()->now();
     object_points_msg.header.frame_id = frame_id;
     objects_pub_->publish(object_points_msg);
+
+    // Publish objects as marker array
+    MarkerArray marker_array;
+    marker_array.markers.push_back(Marker()
+                                     .set__type(Marker::DELETEALL)
+                                     .set__header(std_msgs::msg::Header().set__frame_id(
+                                       "base_link")));  // delete all previous markers
+    int marker_id = 1;
+    for (const auto & object : objects.objects) {
+      Marker marker;
+      marker.id = marker_id++;
+      marker.header.frame_id = "base_link";
+      marker.pose = object.kinematics.pose_with_covariance.pose;
+
+      if (object.shape.type == object.shape.CYLINDER) {
+        marker.type = Marker::CYLINDER;
+      }
+      if (object.shape.type == object.shape.BOUNDING_BOX) {
+        marker.type = Marker::CUBE;
+      }
+      if (object.shape.type == object.shape.POLYGON) {
+        std::cout << "POLYGON" << std::endl;
+        throw std::runtime_error("POLYGON is not supported yet.");
+      }
+      marker.scale = object.shape.dimensions;
+      marker.color.set__a(0.6).set__r(1.0).set__g(0.0).set__b(0.0);
+
+      // append
+      marker_array.markers.push_back(marker);
+    }
+    objects_marker_pub_->publish(marker_array);
   }
 
 private:
   rclcpp::Publisher<PointCloud2>::SharedPtr map_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr lidar_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr objects_pub_;
+  rclcpp::Publisher<MarkerArray>::SharedPtr objects_marker_pub_;
   tf2_ros::TransformBroadcaster tf2_broadcaster_;
 };
