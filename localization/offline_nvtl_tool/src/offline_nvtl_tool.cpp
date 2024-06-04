@@ -133,11 +133,12 @@ OfflineNvtlTool::PointCloud2 OfflineNvtlTool::exclude_object_points(
 
     // Set the bounding box
     const auto dimensions = object.shape.dimensions;
-    crop_box_filter.setMin(
-      Eigen::Vector4f(-dimensions.x / 2., -dimensions.y / 2., -dimensions.z / 2., 1.0));
-    crop_box_filter.setMax(
-      Eigen::Vector4f(dimensions.x / 2., dimensions.y / 2., dimensions.z / 2., 1.0));
-    // NOTE: maybe this transpose is invserse
+    constexpr double gain = 1.2 * 0.5;
+    const Eigen::Vector4f max_with_margin(
+      dimensions.x * gain, dimensions.y * gain, dimensions.z * gain, 1.0);
+    crop_box_filter.setMin(-max_with_margin);
+    crop_box_filter.setMax(max_with_margin);
+
     crop_box_filter.setTransform(
       Eigen::Affine3f(pose_to_matrix4f(object.kinematics.pose_with_covariance.pose)).inverse());
     crop_box_filter.setNegative(true);
