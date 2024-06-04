@@ -6,6 +6,7 @@ autoware_package()
 
 ament_auto_add_executable(${PROJECT_NAME}
   src/offline_nvtl_tool.cpp
+  src/ndt_interface.cpp
 )
 
 ament_auto_package(
