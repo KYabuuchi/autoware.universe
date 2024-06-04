@@ -58,7 +58,7 @@ public:
     RCLCPP_INFO_STREAM(
       this->get_logger(), "Start processing: " << associated_sensor_and_pose.size());
 
-    // Publish tf
+    // Publish tf: map -> viewer
     {
       const auto msg = associated_sensor_and_pose.front();
       geometry_msgs::msg::PoseStamped pose_stamped_msg;
@@ -82,13 +82,23 @@ public:
         tf2_broadcaster_.sendTransform(
           tier4_autoware_utils::pose2transform(pose_stamped_msg, "base_link"));
       }
+      // // Publish lidar pointcloud
+      // {
+      //   PointCloud2 msg_with_now_stamp = lidar_and_pose.pointcloud;
+      //   msg_with_now_stamp.header.stamp = this->get_clock()->now();
+      //   lidar_points_pub_->publish(msg_with_now_stamp);
+      // }
+
+      const auto [nvtl, msg_in_map_frame] =
+        ndt.get_nvtl(lidar_and_pose.pointcloud, lidar_and_pose.pose);
+
+      // Publish lidar pointcloud
       {
-        PointCloud2 msg_with_now_stamp = lidar_and_pose.pointcloud;
+        PointCloud2 msg_with_now_stamp = msg_in_map_frame;
         msg_with_now_stamp.header.stamp = this->get_clock()->now();
+        msg_with_now_stamp.header.frame_id = "map";
         lidar_points_pub_->publish(msg_with_now_stamp);
       }
-
-      const double nvtl = ndt.get_nvtl(lidar_and_pose.pointcloud, lidar_and_pose.pose);
 
       RCLCPP_INFO_STREAM(this->get_logger(), "NVTL: " << nvtl);
 

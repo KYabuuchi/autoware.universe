@@ -1,5 +1,5 @@
 <launch>
-  <arg name="ndt_param_file" default="$(find-pkg-share ndt_scan_matcher)/config/ndt_scan_matcher.param.yaml"/>
+  <arg name="ndt_param_file" default="$(find-pkg-share autoware_launch)/config/localization/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
 
   <node pkg="offline_nvtl_tool" exec="offline_nvtl_tool" output="both">
     <param name="input_rosbag_path" value="dynamic_nvtl_sample_rosbag"/>
