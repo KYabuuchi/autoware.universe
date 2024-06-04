@@ -128,7 +128,8 @@ private:
         throw std::runtime_error("POLYGON is not supported yet.");
       }
       marker.scale = object.shape.dimensions;
-      marker.color.set__a(0.6).set__r(1.0).set__g(0.0).set__b(0.0);
+      marker.color.set__a(0.2).set__r(1.0).set__g(1.0).set__b(1.0);
+      marker.lifetime = rclcpp::Duration(0, 0.3 * 1e9);  // 0.3 sec
 
       // append
       marker_array.markers.push_back(marker);
@@ -136,9 +137,12 @@ private:
     objects_marker_pub_->publish(marker_array);
   }
 
+  PointCloud2 exclude_object_points(const PointCloudWithPose &) const;
+
 private:
   rclcpp::Publisher<PointCloud2>::SharedPtr map_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr lidar_points_pub_;
+  rclcpp::Publisher<PointCloud2>::SharedPtr static_lidar_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr objects_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr objects_marker_pub_;
   tf2_ros::TransformBroadcaster tf2_broadcaster_;
