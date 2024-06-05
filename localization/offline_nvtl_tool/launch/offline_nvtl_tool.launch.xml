@@ -4,7 +4,7 @@
 
   <node pkg="offline_nvtl_tool" exec="offline_nvtl_tool" output="both">
     <param name="input_rosbag_path" value="dynamic_nvtl_sample_rosbag"/>
-    <param name="margin" value="2.0"/>
+    <param name="margin" value="1.5"/>
     <param name="pcd_path" value="$(var pcd_path)"/>
     <param from="$(var ndt_param_file)"/>
   </node>
