@@ -1,8 +1,11 @@
 <launch>
   <arg name="ndt_param_file" default="$(find-pkg-share autoware_launch)/config/localization/ndt_scan_matcher/ndt_scan_matcher.param.yaml"/>
+  <arg name="pcd_path" default="$(env HOME)/autoware_map/sample-map-rosbag/pointcloud_map.pcd"/>
 
   <node pkg="offline_nvtl_tool" exec="offline_nvtl_tool" output="both">
     <param name="input_rosbag_path" value="dynamic_nvtl_sample_rosbag"/>
+    <param name="margin" value="2.0"/>
+    <param name="pcd_path" value="$(var pcd_path)"/>
     <param from="$(var ndt_param_file)"/>
   </node>
 </launch>

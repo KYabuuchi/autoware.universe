@@ -141,6 +141,8 @@ private:
 
   PointCloud2 exclude_object_points(const PointCloudWithPose &) const;
 
+  PointCloud2 load_map_as_msg(const std::string & pcd_path) const;
+
 private:
   rclcpp::Publisher<PointCloud2>::SharedPtr map_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr lidar_points_pub_;
@@ -150,4 +152,5 @@ private:
   tf2_ros::TransformBroadcaster tf2_broadcaster_;
 
   std::ofstream nvtl_file_;
+  const double margin_;
 };

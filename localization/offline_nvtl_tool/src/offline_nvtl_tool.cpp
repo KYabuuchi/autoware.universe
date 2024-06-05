@@ -27,8 +27,10 @@
 #include <map>
 #include <memory>
 
-OfflineNvtlTool::OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_(*this)
+OfflineNvtlTool::OfflineNvtlTool()
+: Node("offline_nvtl_tool"), tf2_broadcaster_(*this), margin_(declare_parameter<double>("margin"))
 {
+  // Create publisher
   map_points_pub_ =
     this->create_publisher<sensor_msgs::msg::PointCloud2>("map", rclcpp::QoS(1).transient_local());
   lidar_points_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("lidar", 10);
@@ -46,6 +48,7 @@ OfflineNvtlTool::OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_
 
   // Create NDT
   const auto map_msg = extract_map_pointcloud(reader);
+  // const auto map_msg = load_map_as_msg(declare_parameter<std::string>("pcd_path"));
   NdtInterface ndt{this};
   ndt.set_pointcloud_map(map_msg);
   {
@@ -146,9 +149,9 @@ OfflineNvtlTool::PointCloud2 OfflineNvtlTool::exclude_object_points(
 
     // Set the bounding box
     const auto dimensions = object.shape.dimensions;
-    constexpr double gain = 1.2 * 0.5;
     const Eigen::Vector4f max_with_margin(
-      dimensions.x * gain, dimensions.y * gain, dimensions.z * gain, 1.0);
+      dimensions.x * margin_ * 0.5, dimensions.y * margin_ * 0.5, dimensions.z * margin_ * 0.5,
+      1.0);
     crop_box_filter.setMin(-max_with_margin);
     crop_box_filter.setMax(max_with_margin);
 
@@ -162,6 +165,20 @@ OfflineNvtlTool::PointCloud2 OfflineNvtlTool::exclude_object_points(
   PointCloud2 filtered_pointcloud_msg;
   pcl::toROSMsg(*cloud_in_base_frame, filtered_pointcloud_msg);
   return filtered_pointcloud_msg;
+}
+
+OfflineNvtlTool::PointCloud2 OfflineNvtlTool::load_map_as_msg(const std::string & pcd_path) const
+{
+  RCLCPP_INFO_STREAM(get_logger(), "start to load pcd: " << pcd_path);
+  pcl::PointCloud<pcl::PointXYZ> map_pointcloud;
+  pcl::io::loadPCDFile<pcl::PointXYZ>(pcd_path, map_pointcloud);
+
+  PointCloud2 map_pointcloud_msg;
+  pcl::toROSMsg(map_pointcloud, map_pointcloud_msg);
+  map_pointcloud_msg.header.frame_id = "map";
+
+  RCLCPP_INFO_STREAM(get_logger(), "finish to load pcd");
+  return map_pointcloud_msg;
 }
 
 int main(int argc, char ** argv)
