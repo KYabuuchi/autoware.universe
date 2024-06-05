@@ -39,7 +39,10 @@ OfflineNvtlTool::OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_
 
   const std::string input_rosbag_path = this->declare_parameter<std::string>("input_rosbag_path");
 
+  //
   const auto reader = RosbagReader(input_rosbag_path);
+  //
+  nvtl_file_ = std::ofstream("nvtl.csv");
 
   // Create NDT
   const auto map_msg = extract_map_pointcloud(reader);
@@ -69,6 +72,8 @@ OfflineNvtlTool::OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_
 
   // Compute normal NVTL
   for (const auto & sensor_and_pose : associated_sensor_and_pose) {
+    const PointCloud2 static_pointcloud_msg = exclude_object_points(sensor_and_pose);
+
     // Publish tf
     {
       geometry_msgs::msg::PoseStamped pose_stamped_msg;
@@ -84,18 +89,28 @@ OfflineNvtlTool::OfflineNvtlTool() : Node("offline_nvtl_tool"), tf2_broadcaster_
       msg_with_now_stamp.header.stamp = this->get_clock()->now();
       lidar_points_pub_->publish(msg_with_now_stamp);
     }
-    // Publish lidar pointcloud
+    // Publish static lidar pointcloud
     {
-      PointCloud2 msg_with_now_stamp = exclude_object_points(sensor_and_pose);
+      PointCloud2 msg_with_now_stamp = static_pointcloud_msg;
       msg_with_now_stamp.header.stamp = this->get_clock()->now();
       static_lidar_points_pub_->publish(msg_with_now_stamp);
     }
     // Publish objects
     publish_objects(sensor_and_pose.objects, "base_link");
 
-    const double nvtl = ndt.get_nvtl(sensor_and_pose.pointcloud, sensor_and_pose.pose);
+    const double raw_nvtl = ndt.get_nvtl(sensor_and_pose.pointcloud, sensor_and_pose.pose);
+    const double static_nvtl = ndt.get_nvtl(static_pointcloud_msg, sensor_and_pose.pose);
 
-    RCLCPP_INFO_STREAM(this->get_logger(), "NVTL: " << nvtl);
+    const auto position = sensor_and_pose.pose.position;
+    RCLCPP_INFO_STREAM(
+      this->get_logger(), " raw NVTL: " << raw_nvtl << " static NVTL: " << static_nvtl);
+
+    // Write to file
+    {
+      const auto stamp = rclcpp::Time(sensor_and_pose.pointcloud.header.stamp);
+      nvtl_file_ << stamp.nanoseconds() << "," << position.x << "," << position.y << ","
+                 << position.z << "," << raw_nvtl << "," << static_nvtl << std::endl;
+    }
 
     if (!rclcpp::ok()) {
       break;
@@ -112,8 +127,6 @@ OfflineNvtlTool::PointCloud2 OfflineNvtlTool::exclude_object_points(
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in_base_frame =
     pcl::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
   pcl::fromROSMsg(point_cloud_with_pose.pointcloud, *cloud_in_base_frame);
-
-  const int initial_coud_size = cloud_in_base_frame->size();
 
   for (const auto & object : objects.objects) {
     pcl::CropBox<pcl::PointXYZ> crop_box_filter;
@@ -145,10 +158,6 @@ OfflineNvtlTool::PointCloud2 OfflineNvtlTool::exclude_object_points(
 
     crop_box_filter.filter(*cloud_in_base_frame);
   }
-
-  RCLCPP_INFO_STREAM(
-    get_logger(),
-    " filtered pointcloud has " << cloud_in_base_frame->size() << " / " << initial_coud_size);
 
   PointCloud2 filtered_pointcloud_msg;
   pcl::toROSMsg(*cloud_in_base_frame, filtered_pointcloud_msg);

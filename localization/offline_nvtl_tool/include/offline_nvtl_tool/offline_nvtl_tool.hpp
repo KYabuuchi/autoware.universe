@@ -11,6 +11,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_ros/transform_broadcaster.h>
 
+#include <fstream>
+
 class OfflineNvtlTool : public rclcpp::Node
 {
 public:
@@ -146,4 +148,6 @@ private:
   rclcpp::Publisher<PointCloud2>::SharedPtr objects_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr objects_marker_pub_;
   tf2_ros::TransformBroadcaster tf2_broadcaster_;
+
+  std::ofstream nvtl_file_;
 };
