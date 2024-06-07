@@ -3,7 +3,7 @@
 
 #include <rclcpp/node.hpp>
 
-#include <autoware_auto_perception_msgs/msg/detected_objects.hpp>
+#include <autoware_perception_msgs/msg/detected_objects.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -16,7 +16,7 @@
 class OfflineNvtlTool : public rclcpp::Node
 {
 public:
-  using DetectedObjects = autoware_auto_perception_msgs::msg::DetectedObjects;
+  using DetectedObjects = autoware_perception_msgs::msg::DetectedObjects;
   using PointCloud2 = sensor_msgs::msg::PointCloud2;
   using PoseCovStamped = geometry_msgs::msg::PoseWithCovarianceStamped;
   using Pose = geometry_msgs::msg::Pose;
