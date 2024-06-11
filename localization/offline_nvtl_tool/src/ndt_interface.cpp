@@ -30,12 +30,9 @@ void NdtInterface::set_pointcloud_map(const sensor_msgs::msg::PointCloud2 & map_
 }
 
 double NdtInterface::get_nvtl(
-  const sensor_msgs::msg::PointCloud2 & source_cloud_msg,
+  const pcl::PointCloud<pcl::PointXYZ> & cloud_in_base_frame,
   const geometry_msgs::msg::Pose & pose_msg) const
 {
-  pcl::PointCloud<PointSource> cloud_in_base_frame;
-  pcl::fromROSMsg(source_cloud_msg, cloud_in_base_frame);
-
   const Eigen::Matrix4f map_to_base_matrix = pose_to_matrix4f(pose_msg);
 
   pcl::PointCloud<PointSource> cloud_in_map_frame;

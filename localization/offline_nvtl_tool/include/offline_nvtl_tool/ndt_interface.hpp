@@ -20,7 +20,7 @@ public:
   void set_pointcloud_map(const sensor_msgs::msg::PointCloud2 & map_points_msg);
 
   double get_nvtl(
-    const sensor_msgs::msg::PointCloud2 & source_cloud_msg,
+    const pcl::PointCloud<PointSource> & cloud_in_base_frame,
     const geometry_msgs::msg::Pose & pose_msg) const;
 
 private:

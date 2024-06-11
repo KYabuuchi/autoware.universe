@@ -9,9 +9,12 @@ ament_auto_add_executable(${PROJECT_NAME}
   src/ndt_interface.cpp
 )
 
+install(PROGRAMS
+  scripts/plot_nvtl.py
+  DESTINATION lib/${PROJECT_NAME})
+
 ament_auto_package(
   INSTALL_TO_SHARE
   launch
   config
-  scripts
 )

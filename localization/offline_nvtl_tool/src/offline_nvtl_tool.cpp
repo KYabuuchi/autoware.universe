@@ -83,49 +83,58 @@ OfflineNvtlTool::OfflineNvtlTool()
 
   // Compute normal NVTL
   for (const auto & sensor_and_pose : associated_sensor_and_pose) {
-    const PointCloud2 static_pointcloud_msg = exclude_object_points(sensor_and_pose);
+    pcl::PointCloud<pcl::PointXYZ> cloud_in_base_frame;
+    pcl::fromROSMsg(sensor_and_pose.pointcloud, cloud_in_base_frame);
 
-    // Publish tf
-    {
-      geometry_msgs::msg::PoseStamped pose_stamped_msg;
-      pose_stamped_msg.header.stamp = this->get_clock()->now();
-      pose_stamped_msg.header.frame_id = "map";
-      pose_stamped_msg.pose = sensor_and_pose.pose;
-      tf2_broadcaster_.sendTransform(
-        tier4_autoware_utils::pose2transform(pose_stamped_msg, "base_link"));
-    }
-    // Publish lidar pointcloud
-    {
-      PointCloud2 msg_with_now_stamp = sensor_and_pose.pointcloud;
-      msg_with_now_stamp.header.stamp = this->get_clock()->now();
-      lidar_points_pub_->publish(msg_with_now_stamp);
-    }
-    // Publish static lidar pointcloud
-    {
-      PointCloud2 msg_with_now_stamp = static_pointcloud_msg;
-      msg_with_now_stamp.header.stamp = this->get_clock()->now();
-      static_lidar_points_pub_->publish(msg_with_now_stamp);
-    }
-    // Publish objects
-    publish_objects(sensor_and_pose.objects, "base_link");
+    const pcl::PointCloud<pcl::PointXYZ> no_dynamic_pointcloud =
+      exclude_object_points(sensor_and_pose);
+    const auto no_ground_pointcloud = extract_no_ground(no_dynamic_pointcloud);
 
-    const auto no_ground_pointcloud = extract_no_ground(static_pointcloud_msg);
-
+    const double raw_nvtl = ndt.get_nvtl(cloud_in_base_frame, sensor_and_pose.pose);
     const double no_ground_nvtl = ndt.get_nvtl(no_ground_pointcloud, sensor_and_pose.pose);
-    const double raw_nvtl = ndt.get_nvtl(sensor_and_pose.pointcloud, sensor_and_pose.pose);
-    const double static_nvtl = ndt.get_nvtl(static_pointcloud_msg, sensor_and_pose.pose);
+    const double no_dynamic_nvtl = ndt.get_nvtl(no_dynamic_pointcloud, sensor_and_pose.pose);
 
     const auto position = sensor_and_pose.pose.position;
     RCLCPP_INFO_STREAM(
-      this->get_logger(), " raw NVTL: " << raw_nvtl << " static NVTL: " << static_nvtl
-                                        << " no ground NVTL: " << no_ground_nvtl);
+      this->get_logger(), " raw NVTL: " << raw_nvtl << " no-dynamic NVTL: " << no_dynamic_nvtl
+                                        << " no-ground NVTL: " << no_ground_nvtl);
 
     // Write to file
     {
       const auto stamp = rclcpp::Time(sensor_and_pose.pointcloud.header.stamp);
       nvtl_file_ << stamp.nanoseconds() << "," << position.x << "," << position.y << ","
-                 << position.z << "," << raw_nvtl << "," << static_nvtl << "," << no_ground_nvtl
+                 << position.z << "," << raw_nvtl << "," << no_dynamic_nvtl << "," << no_ground_nvtl
                  << std::endl;
+    }
+
+    // Publish for visualization
+    {
+      // Publish tf
+      {
+        geometry_msgs::msg::PoseStamped pose_stamped_msg;
+        pose_stamped_msg.header.stamp = this->get_clock()->now();
+        pose_stamped_msg.header.frame_id = "map";
+        pose_stamped_msg.pose = sensor_and_pose.pose;
+        tf2_broadcaster_.sendTransform(
+          tier4_autoware_utils::pose2transform(pose_stamped_msg, "base_link"));
+      }
+      auto publish_point_cloud = [this](
+                                   rclcpp::Publisher<PointCloud2>::SharedPtr publisher,
+                                   pcl::PointCloud<pcl::PointXYZ> pointcloud) {
+        sensor_msgs::msg::PointCloud2 cloud_msg;
+        pcl::toROSMsg(pointcloud, cloud_msg);
+        cloud_msg.header.stamp = this->get_clock()->now();
+        cloud_msg.header.frame_id = "base_link";
+        publisher->publish(cloud_msg);
+      };
+      // Publish raw pointcloud
+      publish_point_cloud(lidar_points_pub_, cloud_in_base_frame);
+      // Publish no-dynamic pointcloud
+      publish_point_cloud(static_lidar_points_pub_, no_dynamic_pointcloud);
+      // Publish no-ground-dynamic points
+      publish_point_cloud(no_ground_points_pub_, no_ground_pointcloud);
+      // Publish objects
+      publish_objects(sensor_and_pose.objects, "base_link");
     }
 
     if (!rclcpp::ok()) {
@@ -135,7 +144,7 @@ OfflineNvtlTool::OfflineNvtlTool()
   }
 }
 
-OfflineNvtlTool::PointCloud2 OfflineNvtlTool::exclude_object_points(
+pcl::PointCloud<pcl::PointXYZ> OfflineNvtlTool::exclude_object_points(
   const PointCloudWithPose & point_cloud_with_pose) const
 {
   const auto & objects = point_cloud_with_pose.objects;
@@ -175,9 +184,7 @@ OfflineNvtlTool::PointCloud2 OfflineNvtlTool::exclude_object_points(
     crop_box_filter.filter(*cloud_in_base_frame);
   }
 
-  PointCloud2 filtered_pointcloud_msg;
-  pcl::toROSMsg(*cloud_in_base_frame, filtered_pointcloud_msg);
-  return filtered_pointcloud_msg;
+  return *cloud_in_base_frame;
 }
 
 OfflineNvtlTool::PointCloud2 OfflineNvtlTool::load_map_as_msg(const std::string & pcd_path) const
@@ -194,34 +201,23 @@ OfflineNvtlTool::PointCloud2 OfflineNvtlTool::load_map_as_msg(const std::string 
   return map_pointcloud_msg;
 }
 
-OfflineNvtlTool::PointCloud2 OfflineNvtlTool::extract_no_ground(const PointCloud2 & pointcloud_msg)
+pcl::PointCloud<pcl::PointXYZ> OfflineNvtlTool::extract_no_ground(
+  const pcl::PointCloud<pcl::PointXYZ> & pointcloud)
 {
-  pcl::PointCloud<pcl::PointXYZ>::Ptr pointcloud =
-    pcl::make_shared<pcl::PointCloud<pcl::PointXYZ>>();
-  pcl::fromROSMsg(pointcloud_msg, *pointcloud);
-
   // whether use no ground points to calculate score
   // remove ground
-  pcl::shared_ptr<pcl::PointCloud<pcl::PointXYZ>> no_ground_points_in_map_ptr(
-    new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZ> no_ground_points_in_base;
 
   constexpr double z_margin_for_ground_removal = 0.8;
 
-  for (std::size_t i = 0; i < pointcloud->size(); i++) {
-    const float point_z = pointcloud->points[i].z;  // NOLINT
+  for (std::size_t i = 0; i < pointcloud.size(); i++) {
+    const float point_z = pointcloud.points[i].z;  // NOLINT
     if (point_z > z_margin_for_ground_removal) {
-      no_ground_points_in_map_ptr->points.push_back(pointcloud->points[i]);
+      no_ground_points_in_base.push_back(pointcloud.points[i]);
     }
   }
 
-  // pub remove-ground points
-  sensor_msgs::msg::PointCloud2 no_ground_points_msg_in_map;
-  pcl::toROSMsg(*no_ground_points_in_map_ptr, no_ground_points_msg_in_map);
-  no_ground_points_msg_in_map.header.stamp = this->get_clock()->now();
-  no_ground_points_msg_in_map.header.frame_id = "base_link";
-  no_ground_points_pub_->publish(no_ground_points_msg_in_map);
-
-  return no_ground_points_msg_in_map;
+  return no_ground_points_in_base;
 }
 
 int main(int argc, char ** argv)

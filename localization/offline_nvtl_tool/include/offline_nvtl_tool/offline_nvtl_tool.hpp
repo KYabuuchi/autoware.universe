@@ -139,11 +139,12 @@ private:
     objects_marker_pub_->publish(marker_array);
   }
 
-  PointCloud2 exclude_object_points(const PointCloudWithPose &) const;
+  pcl::PointCloud<pcl::PointXYZ> exclude_object_points(const PointCloudWithPose &) const;
 
   PointCloud2 load_map_as_msg(const std::string & pcd_path) const;
 
-  PointCloud2 extract_no_ground(const PointCloud2 & pointcloud);
+  pcl::PointCloud<pcl::PointXYZ> extract_no_ground(
+    const pcl::PointCloud<pcl::PointXYZ> & pointcloud);
 
 private:
   rclcpp::Publisher<PointCloud2>::SharedPtr map_points_pub_;
