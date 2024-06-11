@@ -143,11 +143,14 @@ private:
 
   PointCloud2 load_map_as_msg(const std::string & pcd_path) const;
 
+  PointCloud2 extract_no_ground(const PointCloud2 & pointcloud);
+
 private:
   rclcpp::Publisher<PointCloud2>::SharedPtr map_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr lidar_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr static_lidar_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr objects_pub_;
+  rclcpp::Publisher<PointCloud2>::SharedPtr no_ground_points_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr objects_marker_pub_;
   tf2_ros::TransformBroadcaster tf2_broadcaster_;
 

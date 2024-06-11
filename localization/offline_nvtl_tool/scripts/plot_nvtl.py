@@ -35,11 +35,12 @@ if __name__ == "__main__":
 
     # plot time v.s. nvtl
     axis[0].plot(time_stamp, data_frame.iloc[:, 4], label="raw")
-    axis[0].plot(time_stamp, data_frame.iloc[:, 5], label="dynamic points excluded")
+    axis[0].plot(time_stamp, data_frame.iloc[:, 5], label="no dynamic points ")
+    axis[0].plot(time_stamp, data_frame.iloc[:, 6], label="no ground & dynamic points")
 
     # plot position v.s. diff nvtl
     diff = data_frame.iloc[:, 5] - data_frame.iloc[:, 4]
-    axis[1].plot(time_stamp, diff, label="diff")
+    axis[1].plot(time_stamp, diff, label="no dynamic - raw")
 
     # plot position v.s. raw nvtl
     closure = lambda a, v, l: plot_scatter(a, nvtl_max, nvtl_min, position, v, l)
