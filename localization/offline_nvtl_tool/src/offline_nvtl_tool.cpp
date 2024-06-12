@@ -83,6 +83,8 @@ OfflineNvtlTool::OfflineNvtlTool()
   rclcpp::Rate loop_rate(10);  // 10 fps
 
   // Compute normal NVTL
+  double max_offsetted_nvtl = 0.0;
+  double min_true_nvtl = 5.0;
   for (const auto & sensor_and_pose : associated_sensor_and_pose) {
     pcl::PointCloud<pcl::PointXYZ> cloud_in_base_frame;
     pcl::fromROSMsg(sensor_and_pose.pointcloud, cloud_in_base_frame);
@@ -95,10 +97,15 @@ OfflineNvtlTool::OfflineNvtlTool()
     const double no_ground_nvtl = ndt.get_nvtl(no_ground_pointcloud, sensor_and_pose.pose);
     const double no_dynamic_nvtl = ndt.get_nvtl(no_dynamic_pointcloud, sensor_and_pose.pose);
 
+    min_true_nvtl = std::min(min_true_nvtl, no_ground_nvtl);
+
     const auto position = sensor_and_pose.pose.position;
+    // RCLCPP_INFO_STREAM(
+    //   this->get_logger(), " raw NVTL: " << raw_nvtl << " no-dynamic NVTL: " << no_dynamic_nvtl
+    //                                     << " no-ground NVTL: " << no_ground_nvtl);
     RCLCPP_INFO_STREAM(
-      this->get_logger(), " raw NVTL: " << raw_nvtl << " no-dynamic NVTL: " << no_dynamic_nvtl
-                                        << " no-ground NVTL: " << no_ground_nvtl);
+      this->get_logger(),
+      " max offsetted nvtl : " << max_offsetted_nvtl << " min true nvtl: " << min_true_nvtl);
 
     // Compute nvtl around ego position
     std::unordered_map<std::pair<int, int>, double> around_nvtl;
@@ -107,13 +114,14 @@ OfflineNvtlTool::OfflineNvtlTool()
         auto offsetted_pose = sensor_and_pose.pose;
         offsetted_pose.position.x += i * offset_interval_;
         offsetted_pose.position.y += j * offset_interval_;
-        const double offsetted_nvtl = ndt.get_nvtl(no_dynamic_pointcloud, offsetted_pose);
+        const double offsetted_nvtl = ndt.get_nvtl(no_ground_pointcloud, offsetted_pose);
         around_nvtl.emplace(std::make_pair(i, j), offsetted_nvtl);
-        if (i == 0 && j == 0) {
-          RCLCPP_INFO_STREAM(this->get_logger(), "offsetted NVTL: " << offsetted_nvtl);
+        if (i != 0 || j != 0) {
+          max_offsetted_nvtl = std::max(max_offsetted_nvtl, offsetted_nvtl);
         }
       }
     }
+
     publish_around_nvtl(around_nvtl);
 
     // Write to file

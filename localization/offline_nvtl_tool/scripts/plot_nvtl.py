@@ -20,7 +20,7 @@ if __name__ == "__main__":
     data_frame = pd.read_csv("nvtl.csv")
 
     fig = plt.figure(figsize=(15, 5))
-    axis = [fig.add_subplot(1, 4, i) for i in range(1, 5)]
+    axis = [fig.add_subplot(2, 2, i) for i in range(1, 5)]
 
     # convert time to seconds
     time_stamp = data_frame.iloc[:, 0] * 1e-9
