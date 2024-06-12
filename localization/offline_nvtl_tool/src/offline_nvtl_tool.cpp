@@ -131,7 +131,13 @@ OfflineNvtlTool::OfflineNvtlTool()
       const auto stamp = rclcpp::Time(sensor_and_pose.pointcloud.header.stamp);
       nvtl_file_ << stamp.nanoseconds() << "," << position.x << "," << position.y << ","
                  << position.z << "," << raw_nvtl << "," << no_dynamic_nvtl << "," << no_ground_nvtl
-                 << std::endl;
+                 << ",";
+      for (int i = -6; i <= 6; i++) {
+        for (int j = -6; j <= 6; j++) {
+          nvtl_file_ << around_nvtl.at(std::make_pair(i, j)) << ",";
+        }
+      }
+      nvtl_file_ << std::endl;
     }
 
     // Publish for visualization
