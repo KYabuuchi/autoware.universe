@@ -12,6 +12,18 @@
 #include <tf2_ros/transform_broadcaster.h>
 
 #include <fstream>
+namespace std
+{
+template <>
+class hash<std::pair<int, int>>
+{
+public:
+  size_t operator()(const std::pair<int, int> & p) const
+  {
+    return (p.first * 73856093 ^ p.second * 19349663);
+  }
+};
+}  // namespace std
 
 class OfflineNvtlTool : public rclcpp::Node
 {
@@ -146,6 +158,8 @@ private:
   pcl::PointCloud<pcl::PointXYZ> extract_no_ground(
     const pcl::PointCloud<pcl::PointXYZ> & pointcloud);
 
+  void publish_around_nvtl(std::unordered_map<std::pair<int, int>, double> around_nvtl);
+
 private:
   rclcpp::Publisher<PointCloud2>::SharedPtr map_points_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr lidar_points_pub_;
@@ -153,8 +167,10 @@ private:
   rclcpp::Publisher<PointCloud2>::SharedPtr objects_pub_;
   rclcpp::Publisher<PointCloud2>::SharedPtr no_ground_points_pub_;
   rclcpp::Publisher<MarkerArray>::SharedPtr objects_marker_pub_;
+  rclcpp::Publisher<MarkerArray>::SharedPtr around_nvtl_pub_;
   tf2_ros::TransformBroadcaster tf2_broadcaster_;
 
   std::ofstream nvtl_file_;
   const double margin_;
+  const double offset_interval_{0.5};
 };

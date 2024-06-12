@@ -40,6 +40,7 @@ OfflineNvtlTool::OfflineNvtlTool()
     this->create_publisher<sensor_msgs::msg::PointCloud2>("no_ground_points", 10);
   objects_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("objects", 10);
   objects_marker_pub_ = this->create_publisher<MarkerArray>("objects_marker", 10);
+  around_nvtl_pub_ = this->create_publisher<MarkerArray>("around_nvtl", 10);
 
   const std::string input_rosbag_path = this->declare_parameter<std::string>("input_rosbag_path");
 
@@ -98,6 +99,22 @@ OfflineNvtlTool::OfflineNvtlTool()
     RCLCPP_INFO_STREAM(
       this->get_logger(), " raw NVTL: " << raw_nvtl << " no-dynamic NVTL: " << no_dynamic_nvtl
                                         << " no-ground NVTL: " << no_ground_nvtl);
+
+    // Compute nvtl around ego position
+    std::unordered_map<std::pair<int, int>, double> around_nvtl;
+    for (int i = -6; i <= 6; i++) {
+      for (int j = -6; j <= 6; j++) {
+        auto offsetted_pose = sensor_and_pose.pose;
+        offsetted_pose.position.x += i * offset_interval_;
+        offsetted_pose.position.y += j * offset_interval_;
+        const double offsetted_nvtl = ndt.get_nvtl(no_dynamic_pointcloud, offsetted_pose);
+        around_nvtl.emplace(std::make_pair(i, j), offsetted_nvtl);
+        if (i == 0 && j == 0) {
+          RCLCPP_INFO_STREAM(this->get_logger(), "offsetted NVTL: " << offsetted_nvtl);
+        }
+      }
+    }
+    publish_around_nvtl(around_nvtl);
 
     // Write to file
     {
@@ -218,6 +235,55 @@ pcl::PointCloud<pcl::PointXYZ> OfflineNvtlTool::extract_no_ground(
   }
 
   return no_ground_points_in_base;
+}
+
+void OfflineNvtlTool::publish_around_nvtl(
+  std::unordered_map<std::pair<int, int>, double> around_nvtl)
+{
+  MarkerArray marker_array;
+  int marker_id = 0;
+
+  auto color_scale = [](double value) -> std_msgs::msg::ColorRGBA {
+    // clang-format off
+    double r = 1.0, g = 1.0, b = 1.0;
+    value = std::clamp(value, 0.0, 1.0);
+    if (value < 0.25) {
+      r = 0; g = 4 * (value);
+    } else if (value < 0.5) {
+      r = 0; b = 1 + 4 * (0.25 - value);
+    } else if (value < 0.75) {
+      r = 4 * (value - 0.5); b = 0;
+    } else {
+      g = 1 + 4 * (0.75 - value); b = 0;
+    }
+    // clang-format on
+    return std_msgs::msg::ColorRGBA().set__r(r).set__g(g).set__b(b).set__a(0.8);
+  };
+
+  auto normalize = [color_scale](double score) -> double {
+    constexpr double max_score = 3.0;
+    constexpr double min_score = 2.3;
+    const double normalized_score = (score - min_score) / (max_score - min_score);
+    return std::clamp(normalized_score, 0.0, 1.0);
+  };
+
+  for (const auto & [offset, nvtl] : around_nvtl) {
+    const double normalized_score = normalize(nvtl);
+
+    Marker marker;
+    marker.id = marker_id++;
+    marker.header.frame_id = "base_link";
+    marker.type = Marker::CUBE;
+    marker.pose.position.set__x(offset.first * offset_interval_)
+      .set__y(offset.second * offset_interval_)
+      .set__z(0.0);
+    marker.scale.set__x(0.5).set__y(0.5).set__z(normalized_score + 0.1);
+    marker.color = color_scale(normalized_score);
+
+    // append
+    marker_array.markers.push_back(marker);
+  }
+  around_nvtl_pub_->publish(marker_array);
 }
 
 int main(int argc, char ** argv)
