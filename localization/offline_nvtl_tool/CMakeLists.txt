@@ -6,6 +6,7 @@ autoware_package()
 
 ament_auto_add_executable(${PROJECT_NAME}
   src/offline_nvtl_tool.cpp
+  src/map_loader.cpp
   src/ndt_interface.cpp
 )
 

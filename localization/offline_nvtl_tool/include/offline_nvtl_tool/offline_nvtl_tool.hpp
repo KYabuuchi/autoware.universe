@@ -45,12 +45,15 @@ private:
     DetectedObjects objects;
   };
 
-  static PointCloud2 extract_map_pointcloud(const RosbagReader & reader)
+  static pcl::PointCloud<pcl::PointXYZ> extract_map_pointcloud(const RosbagReader & reader)
   {
     while (reader.has_next()) {
       const std::shared_ptr<const rosbag2_storage::SerializedBagMessage> msg = reader.read_next();
       if (msg->topic_name == "/map/pointcloud_map") {
-        return decode_with_type<PointCloud2>(msg);
+        const PointCloud2 pointcloud_msg = decode_with_type<PointCloud2>(msg);
+        pcl::PointCloud<pcl::PointXYZ> pointcloud;
+        pcl::fromROSMsg(pointcloud_msg, pointcloud);
+        return pointcloud;
       }
     }
     throw std::runtime_error("No map pointcloud found in rosbag");

@@ -12,19 +12,16 @@ NdtInterface::NdtInterface(rclcpp::Node * node) : ndt_ptr_(new NdtType)
   ndt_ptr_->setParams(parameters.ndt);
 }
 
-void NdtInterface::set_pointcloud_map(const sensor_msgs::msg::PointCloud2 & map_points_msg)
+void NdtInterface::set_pointcloud_map(const pcl::PointCloud<pcl::PointXYZ> & map_points)
 {
-  pcl::shared_ptr<pcl::PointCloud<PointTarget>> map_points(new pcl::PointCloud<PointTarget>);
-
-  pcl::fromROSMsg(map_points_msg, *map_points);
-
-  ndt_ptr_->setInputTarget(map_points);
+  pcl::PointCloud<PointSource>::Ptr map_points_ptr = map_points.makeShared();
+  ndt_ptr_->setInputTarget(map_points_ptr);
 
   // NOTE: We need to call align() once before calling
   // calculateNearestVoxelTransformationLikelihood() to initialize the some internal variables.
   {
     pcl::PointCloud<PointSource> output_cloud;
-    ndt_ptr_->setInputSource(map_points);
+    ndt_ptr_->setInputSource(map_points_ptr);
     ndt_ptr_->align(output_cloud, Eigen::Matrix4f::Identity());
   }
 }

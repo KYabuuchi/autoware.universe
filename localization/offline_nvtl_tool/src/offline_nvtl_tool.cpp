@@ -14,6 +14,7 @@
 
 #include "offline_nvtl_tool/offline_nvtl_tool.hpp"
 
+#include "offline_nvtl_tool/map_loader.hpp"
 #include "offline_nvtl_tool/ndt_interface.hpp"
 
 #include <localization_util/util_func.hpp>
@@ -51,16 +52,20 @@ OfflineNvtlTool::OfflineNvtlTool()
 
   // Create NDT
   const std::string pcd_path = declare_parameter<std::string>("pcd_path");
-  PointCloud2 map_msg;
+  pcl::PointCloud<pcl::PointXYZ> map_pointcloud;
   if (pcd_path != "") {
-    map_msg = load_map_as_msg(pcd_path);
+    map_pointcloud = load_pcd_files(pcd_path);
   } else {
-    map_msg = extract_map_pointcloud(reader);
+    map_pointcloud = extract_map_pointcloud(reader);
   }
 
   NdtInterface ndt{this};
-  ndt.set_pointcloud_map(map_msg);
+  ndt.set_pointcloud_map(map_pointcloud);
   {
+    PointCloud2 map_msg;
+    pcl::toROSMsg(map_pointcloud, map_msg);
+    map_msg.header.frame_id = "map";
+    map_msg.header.stamp = this->get_clock()->now();
     map_points_pub_->publish(map_msg);
   }
 
@@ -100,9 +105,6 @@ OfflineNvtlTool::OfflineNvtlTool()
     min_true_nvtl = std::min(min_true_nvtl, no_ground_nvtl);
 
     const auto position = sensor_and_pose.pose.position;
-    // RCLCPP_INFO_STREAM(
-    //   this->get_logger(), " raw NVTL: " << raw_nvtl << " no-dynamic NVTL: " << no_dynamic_nvtl
-    //                                     << " no-ground NVTL: " << no_ground_nvtl);
     RCLCPP_INFO_STREAM(
       this->get_logger(),
       " max offsetted nvtl : " << max_offsetted_nvtl << " min true nvtl: " << min_true_nvtl);

@@ -17,7 +17,7 @@ public:
 
   NdtInterface(rclcpp::Node * node);
 
-  void set_pointcloud_map(const sensor_msgs::msg::PointCloud2 & map_points_msg);
+  void set_pointcloud_map(const pcl::PointCloud<pcl::PointXYZ> & map_points);
 
   double get_nvtl(
     const pcl::PointCloud<PointSource> & cloud_in_base_frame,
