@@ -1,5 +1,6 @@
 #pragma once
 #include "offline_nvtl_tool/rosbag_handler.hpp"
+#include "offline_nvtl_tool/topic_synchronizer.hpp"
 
 #include <rclcpp/node.hpp>
 
@@ -13,49 +14,6 @@
 #include <tf2_ros/transform_broadcaster.h>
 
 #include <fstream>
-namespace std
-{
-template <>
-class hash<std::pair<int, int>>
-{
-public:
-  size_t operator()(const std::pair<int, int> & p) const
-  {
-    return (p.first * 73856093 ^ p.second * 19349663);
-  }
-};
-}  // namespace std
-
-struct MyTime
-{
-  int32_t sec;
-  uint32_t nanosec;
-  MyTime(const builtin_interfaces::msg::Time & time) : sec(time.sec), nanosec(time.nanosec) {}
-
-  bool operator<(const MyTime & other) const
-  {
-    if (sec == other.sec) {
-      return nanosec < other.nanosec;
-    }
-    return sec < other.sec;
-  }
-};
-using OdometryMap = std::map<MyTime, geometry_msgs::msg::Pose>;
-
-geometry_msgs::msg::Pose search_nearest_odometry(
-  const OdometryMap & odometry_map, const MyTime query)
-{
-  const auto it = odometry_map.lower_bound(query);
-  if (it == odometry_map.begin()) {
-    return it->second;
-  }
-  if (it == odometry_map.end()) {
-    return std::prev(it)->second;
-  }
-  // const auto prev_it = std::prev(it);
-  // prev_it->second is fine too
-  return it->second;
-}
 
 class OfflineNvtlTool : public rclcpp::Node
 {
@@ -71,13 +29,6 @@ public:
   OfflineNvtlTool();
 
 private:
-  struct PointCloudWithPose
-  {
-    PointCloud2 pointcloud;
-    Pose pose;
-    DetectedObjects objects;
-  };
-
   static pcl::PointCloud<pcl::PointXYZ> extract_map_pointcloud(const RosbagReader & reader)
   {
     while (reader.has_next()) {
@@ -90,60 +41,6 @@ private:
       }
     }
     throw std::runtime_error("No map pointcloud found in rosbag");
-  }
-
-  std::vector<PointCloudWithPose> extract_pointcloud_with_pose(const RosbagReader & reader)
-  {
-    // header.stamp.nanosec -> msg
-    std::vector<PointCloud2> point_cloud_vector;
-    std::unordered_map<uint32_t, Pose> pose_map;
-    std::unordered_map<uint32_t, DetectedObjects> objects_map;
-    OdometryMap odometry_map;
-
-    // Extract all pose messages
-    while (reader.has_next()) {
-      const std::shared_ptr<const rosbag2_storage::SerializedBagMessage> msg = reader.read_next();
-
-      if (msg->topic_name == "/perception/object_recognition/detection/centerpoint/objects") {
-        const DetectedObjects objects = decode_with_type<DetectedObjects>(msg);
-        objects_map.emplace(objects.header.stamp.nanosec, objects);
-      }
-      if (msg->topic_name == "/localization/pose_estimator/pose_with_covariance") {
-        const PoseCovStamped pose_cov_stamped = decode_with_type<PoseCovStamped>(msg);
-        pose_map.emplace(pose_cov_stamped.header.stamp.nanosec, pose_cov_stamped.pose.pose);
-      }
-      if (msg->topic_name == "/localization/kinematic_state") {
-        const Odometry odometry = decode_with_type<Odometry>(msg);
-        odometry_map.emplace(odometry.header.stamp, odometry.pose.pose);
-      }
-      if (msg->topic_name == "/localization/util/downsample/pointcloud") {
-        const PointCloud2 point_cloud = decode_with_type<PointCloud2>(msg);
-        point_cloud_vector.push_back(point_cloud);
-      }
-    }
-
-    // Associated point cloud with pose
-    std::vector<PointCloudWithPose> point_cloud_with_pose_array;
-
-    for (const auto & point_cloud : point_cloud_vector) {
-      const uint32_t nanosec = point_cloud.header.stamp.nanosec;
-      // if (pose_map.find(nanosec) == pose_map.end()) {
-      //   continue;
-      // }
-      if (objects_map.find(nanosec) == objects_map.end()) {
-        continue;
-      }
-
-      const Pose odometry_pose =
-        search_nearest_odometry(odometry_map, MyTime{point_cloud.header.stamp});
-
-      point_cloud_with_pose_array.push_back({point_cloud, odometry_pose, objects_map.at(nanosec)});
-    }
-
-    RCLCPP_INFO_STREAM(
-      this->get_logger(), "Extracted " << point_cloud_with_pose_array.size() << " dataset");
-
-    return point_cloud_with_pose_array;
   }
 
   void publish_objects(const DetectedObjects & objects, const std::string & frame_id)

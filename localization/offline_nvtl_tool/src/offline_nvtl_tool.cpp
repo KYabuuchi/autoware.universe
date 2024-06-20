@@ -28,6 +28,19 @@
 #include <map>
 #include <memory>
 
+namespace std
+{
+template <>
+class hash<std::pair<int, int>>
+{
+public:
+  size_t operator()(const std::pair<int, int> & p) const
+  {
+    return (p.first * 73856093 ^ p.second * 19349663);
+  }
+};
+}  // namespace std
+
 OfflineNvtlTool::OfflineNvtlTool()
 : Node("offline_nvtl_tool"), tf2_broadcaster_(*this), margin_(declare_parameter<double>("margin"))
 {
@@ -80,7 +93,7 @@ OfflineNvtlTool::OfflineNvtlTool()
     geometry_msgs::msg::PoseStamped pose_stamped_msg;
     pose_stamped_msg.header.stamp = this->get_clock()->now();
     pose_stamped_msg.header.frame_id = "map";
-    pose_stamped_msg.pose = msg.pose;
+    pose_stamped_msg.pose = msg.ndt_pose;
     tf2_broadcaster_.sendTransform(
       autoware::universe_utils::pose2transform(pose_stamped_msg, "viewer"));
   }
@@ -98,13 +111,13 @@ OfflineNvtlTool::OfflineNvtlTool()
       exclude_object_points(sensor_and_pose);
     const auto no_ground_pointcloud = extract_no_ground(no_dynamic_pointcloud);
 
-    const double raw_nvtl = ndt.get_nvtl(cloud_in_base_frame, sensor_and_pose.pose);
-    const double no_ground_nvtl = ndt.get_nvtl(no_ground_pointcloud, sensor_and_pose.pose);
-    const double no_dynamic_nvtl = ndt.get_nvtl(no_dynamic_pointcloud, sensor_and_pose.pose);
+    const double raw_nvtl = ndt.get_nvtl(cloud_in_base_frame, sensor_and_pose.ndt_pose);
+    const double no_ground_nvtl = ndt.get_nvtl(no_ground_pointcloud, sensor_and_pose.ndt_pose);
+    const double no_dynamic_nvtl = ndt.get_nvtl(no_dynamic_pointcloud, sensor_and_pose.ndt_pose);
 
     min_true_nvtl = std::min(min_true_nvtl, no_ground_nvtl);
 
-    const auto position = sensor_and_pose.pose.position;
+    const auto position = sensor_and_pose.ndt_pose.position;
     RCLCPP_INFO_STREAM(
       this->get_logger(),
       " max offsetted nvtl : " << max_offsetted_nvtl << " min true nvtl: " << min_true_nvtl);
@@ -113,7 +126,7 @@ OfflineNvtlTool::OfflineNvtlTool()
     std::unordered_map<std::pair<int, int>, double> around_nvtl;
     for (int i = -6; i <= 6; i++) {
       for (int j = -6; j <= 6; j++) {
-        auto offsetted_pose = sensor_and_pose.pose;
+        auto offsetted_pose = sensor_and_pose.ndt_pose;
         offsetted_pose.position.x += i * offset_interval_;
         offsetted_pose.position.y += j * offset_interval_;
         const double offsetted_nvtl = ndt.get_nvtl(no_ground_pointcloud, offsetted_pose);
@@ -147,7 +160,7 @@ OfflineNvtlTool::OfflineNvtlTool()
         geometry_msgs::msg::PoseStamped pose_stamped_msg;
         pose_stamped_msg.header.stamp = this->get_clock()->now();
         pose_stamped_msg.header.frame_id = "map";
-        pose_stamped_msg.pose = sensor_and_pose.pose;
+        pose_stamped_msg.pose = sensor_and_pose.ndt_pose;
         tf2_broadcaster_.sendTransform(
           autoware::universe_utils::pose2transform(pose_stamped_msg, "base_link"));
       }
