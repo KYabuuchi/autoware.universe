@@ -17,10 +17,10 @@
 #include "offline_nvtl_tool/map_loader.hpp"
 #include "offline_nvtl_tool/ndt_interface.hpp"
 
+#include <autoware/universe_utils/geometry/geometry.hpp>
 #include <localization_util/util_func.hpp>
 #include <rclcpp/logging.hpp>
 #include <rclcpp/time.hpp>
-#include <tier4_autoware_utils/geometry/geometry.hpp>
 
 #include <pcl/filters/crop_box.h>
 
@@ -82,7 +82,7 @@ OfflineNvtlTool::OfflineNvtlTool()
     pose_stamped_msg.header.frame_id = "map";
     pose_stamped_msg.pose = msg.pose;
     tf2_broadcaster_.sendTransform(
-      tier4_autoware_utils::pose2transform(pose_stamped_msg, "viewer"));
+      autoware::universe_utils::pose2transform(pose_stamped_msg, "viewer"));
   }
 
   rclcpp::Rate loop_rate(10);  // 10 fps
@@ -149,7 +149,7 @@ OfflineNvtlTool::OfflineNvtlTool()
         pose_stamped_msg.header.frame_id = "map";
         pose_stamped_msg.pose = sensor_and_pose.pose;
         tf2_broadcaster_.sendTransform(
-          tier4_autoware_utils::pose2transform(pose_stamped_msg, "base_link"));
+          autoware::universe_utils::pose2transform(pose_stamped_msg, "base_link"));
       }
       auto publish_point_cloud = [this](
                                    rclcpp::Publisher<PointCloud2>::SharedPtr publisher,

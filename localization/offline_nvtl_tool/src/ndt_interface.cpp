@@ -1,8 +1,8 @@
 #include "offline_nvtl_tool/ndt_interface.hpp"
 
+#include <autoware/universe_utils/transform/transforms.hpp>
 #include <localization_util/util_func.hpp>
 #include <ndt_scan_matcher/hyper_parameters.hpp>
-#include <tier4_autoware_utils/transform/transforms.hpp>
 
 #include <pcl_conversions/pcl_conversions.h>
 
@@ -33,7 +33,7 @@ double NdtInterface::get_nvtl(
   const Eigen::Matrix4f map_to_base_matrix = pose_to_matrix4f(pose_msg);
 
   pcl::PointCloud<PointSource> cloud_in_map_frame;
-  tier4_autoware_utils::transformPointCloud(
+  autoware::universe_utils::transformPointCloud(
     cloud_in_base_frame, cloud_in_map_frame, map_to_base_matrix);
 
   const double nvtl = ndt_ptr_->calculateNearestVoxelTransformationLikelihood(cloud_in_map_frame);

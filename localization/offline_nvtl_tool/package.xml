@@ -13,6 +13,7 @@
 
   <depend>autoware_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>autoware_universe_utils</depend>
   <depend>rclcpp</depend>
   <depend>tf2</depend>
   <depend>rosbag2_cpp</depend>
