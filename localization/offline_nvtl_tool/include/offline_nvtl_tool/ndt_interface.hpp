@@ -19,9 +19,9 @@ public:
 
   void set_pointcloud_map(const pcl::PointCloud<pcl::PointXYZ> & map_points);
 
-  double get_nvtl(
+  double get_score(
     const pcl::PointCloud<PointSource> & cloud_in_base_frame,
-    const geometry_msgs::msg::Pose & pose_msg) const;
+    const geometry_msgs::msg::Pose & pose_msg, bool use_nvtl) const;
 
 private:
   NdtPtrType ndt_ptr_;

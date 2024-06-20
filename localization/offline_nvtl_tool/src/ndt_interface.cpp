@@ -26,9 +26,9 @@ void NdtInterface::set_pointcloud_map(const pcl::PointCloud<pcl::PointXYZ> & map
   }
 }
 
-double NdtInterface::get_nvtl(
+double NdtInterface::get_score(
   const pcl::PointCloud<pcl::PointXYZ> & cloud_in_base_frame,
-  const geometry_msgs::msg::Pose & pose_msg) const
+  const geometry_msgs::msg::Pose & pose_msg, bool use_nvtl) const
 {
   const Eigen::Matrix4f map_to_base_matrix = pose_to_matrix4f(pose_msg);
 
@@ -36,7 +36,8 @@ double NdtInterface::get_nvtl(
   autoware::universe_utils::transformPointCloud(
     cloud_in_base_frame, cloud_in_map_frame, map_to_base_matrix);
 
-  const double nvtl = ndt_ptr_->calculateNearestVoxelTransformationLikelihood(cloud_in_map_frame);
-
-  return nvtl;
+  if (use_nvtl) {
+    return ndt_ptr_->calculateNearestVoxelTransformationLikelihood(cloud_in_map_frame);
+  }
+  return ndt_ptr_->calculateTransformationProbability(cloud_in_map_frame);
 }

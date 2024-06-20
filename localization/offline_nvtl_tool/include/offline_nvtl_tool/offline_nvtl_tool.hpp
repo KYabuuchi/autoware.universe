@@ -113,4 +113,6 @@ private:
   std::ofstream nvtl_file_;
   const double margin_;
   const double offset_interval_{0.5};
+  const bool use_ndt_pose_;
+  const bool use_nvtl_;
 };

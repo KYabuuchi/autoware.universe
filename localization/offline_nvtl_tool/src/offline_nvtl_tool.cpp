@@ -42,7 +42,11 @@ public:
 }  // namespace std
 
 OfflineNvtlTool::OfflineNvtlTool()
-: Node("offline_nvtl_tool"), tf2_broadcaster_(*this), margin_(declare_parameter<double>("margin"))
+: Node("offline_nvtl_tool"),
+  tf2_broadcaster_(*this),
+  margin_(declare_parameter<double>("margin")),
+  use_ndt_pose_(declare_parameter<bool>("use_ndt_pose")),
+  use_nvtl_(declare_parameter<bool>("use_nvtl"))
 {
   // Create publisher
   map_points_pub_ =
@@ -102,8 +106,24 @@ OfflineNvtlTool::OfflineNvtlTool()
 
   // Compute normal NVTL
   double max_offsetted_nvtl = 0.0;
-  double min_true_nvtl = 5.0;
+  double min_true_nvtl = std::numeric_limits<double>::max();
+
+  auto get_score = [&](
+                     const pcl::PointCloud<pcl::PointXYZ> & cloud_in_base_frame,
+                     const geometry_msgs::msg::Pose & pose_msg) -> double {
+    return ndt.get_score(cloud_in_base_frame, pose_msg, this->use_nvtl_);
+  };
+
   for (const auto & sensor_and_pose : associated_sensor_and_pose) {
+    const Pose & reference_pose = [ use_ndt_pose = this->use_ndt_pose_, sensor_and_pose ]() -> auto
+    {
+      if (use_ndt_pose) {
+        return sensor_and_pose.ndt_pose;
+      }
+      return sensor_and_pose.ekf_pose;
+    }
+    ();
+
     pcl::PointCloud<pcl::PointXYZ> cloud_in_base_frame;
     pcl::fromROSMsg(sensor_and_pose.pointcloud, cloud_in_base_frame);
 
@@ -111,13 +131,12 @@ OfflineNvtlTool::OfflineNvtlTool()
       exclude_object_points(sensor_and_pose);
     const auto no_ground_pointcloud = extract_no_ground(no_dynamic_pointcloud);
 
-    const double raw_nvtl = ndt.get_nvtl(cloud_in_base_frame, sensor_and_pose.ndt_pose);
-    const double no_ground_nvtl = ndt.get_nvtl(no_ground_pointcloud, sensor_and_pose.ndt_pose);
-    const double no_dynamic_nvtl = ndt.get_nvtl(no_dynamic_pointcloud, sensor_and_pose.ndt_pose);
+    const double raw_nvtl = get_score(cloud_in_base_frame, reference_pose);
+    const double no_ground_nvtl = get_score(no_ground_pointcloud, reference_pose);
+    const double no_dynamic_nvtl = get_score(no_dynamic_pointcloud, reference_pose);
 
     min_true_nvtl = std::min(min_true_nvtl, no_ground_nvtl);
 
-    const auto position = sensor_and_pose.ndt_pose.position;
     RCLCPP_INFO_STREAM(
       this->get_logger(),
       " max offsetted nvtl : " << max_offsetted_nvtl << " min true nvtl: " << min_true_nvtl);
@@ -126,10 +145,10 @@ OfflineNvtlTool::OfflineNvtlTool()
     std::unordered_map<std::pair<int, int>, double> around_nvtl;
     for (int i = -6; i <= 6; i++) {
       for (int j = -6; j <= 6; j++) {
-        auto offsetted_pose = sensor_and_pose.ndt_pose;
+        Pose offsetted_pose = reference_pose;
         offsetted_pose.position.x += i * offset_interval_;
         offsetted_pose.position.y += j * offset_interval_;
-        const double offsetted_nvtl = ndt.get_nvtl(no_ground_pointcloud, offsetted_pose);
+        const double offsetted_nvtl = get_score(no_ground_pointcloud, offsetted_pose);
         around_nvtl.emplace(std::make_pair(i, j), offsetted_nvtl);
         if (i != 0 || j != 0) {
           max_offsetted_nvtl = std::max(max_offsetted_nvtl, offsetted_nvtl);
@@ -142,6 +161,7 @@ OfflineNvtlTool::OfflineNvtlTool()
     // Write to file
     {
       const auto stamp = rclcpp::Time(sensor_and_pose.pointcloud.header.stamp);
+      const auto position = reference_pose.position;
       nvtl_file_ << stamp.nanoseconds() << "," << position.x << "," << position.y << ","
                  << position.z << "," << raw_nvtl << "," << no_dynamic_nvtl << "," << no_ground_nvtl
                  << ",";

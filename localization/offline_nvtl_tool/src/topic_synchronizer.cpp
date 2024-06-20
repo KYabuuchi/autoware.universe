@@ -4,6 +4,7 @@
 
 #include <nav_msgs/msg/odometry.hpp>
 
+#include <iostream>
 #include <map>
 
 namespace std
@@ -14,26 +15,10 @@ class hash<rclcpp::Time>
 public:
   size_t operator()(const rclcpp::Time & time) const
   {
-    return static_cast<size_t>(time.nanoseconds());
+    return std::hash<int64_t>{}(time.nanoseconds());
   }
 };
 }  // namespace std
-
-struct MyTime
-{
-  int32_t sec;
-  uint32_t nanosec;
-
-  MyTime(const builtin_interfaces::msg::Time & time) : sec(time.sec), nanosec(time.nanosec) {}
-
-  bool operator<(const MyTime & other) const
-  {
-    if (sec == other.sec) {
-      return nanosec < other.nanosec;
-    }
-    return sec < other.sec;
-  }
-};
 
 namespace
 {
@@ -42,11 +27,10 @@ using DetectedObjects = autoware_perception_msgs::msg::DetectedObjects;
 using PointCloud2 = sensor_msgs::msg::PointCloud2;
 using Pose = geometry_msgs::msg::Pose;
 using PoseCovStamped = geometry_msgs::msg::PoseWithCovarianceStamped;
-
 }  // namespace
 
 Pose search_nearest_odometry(
-  const std::map<rclcpp::Time, Pose> & odometry_map, const rclcpp::Time query)
+  const std::map<rclcpp::Time, Pose> & odometry_map, const rclcpp::Time & query)
 {
   const auto it = odometry_map.lower_bound(query);
   if (it == odometry_map.begin()) {
@@ -55,8 +39,10 @@ Pose search_nearest_odometry(
   if (it == odometry_map.end()) {
     return std::prev(it)->second;
   }
+  // TODO: pick the nearest one from it and std::prev(it)
   // const auto prev_it = std::prev(it);
-  // prev_it->second is fine too
+
+  // TODO: check whether the time difference is within a certain threshold
   return it->second;
 }
 
@@ -102,7 +88,6 @@ std::vector<PointCloudWithPose> extract_pointcloud_with_pose(const RosbagReader 
     if (objects_map.find(query_stamp) == objects_map.end()) {
       continue;
     }
-
     const Pose & odometry_pose = search_nearest_odometry(odometry_map, query_stamp);
 
     point_cloud_with_pose_array.push_back(
