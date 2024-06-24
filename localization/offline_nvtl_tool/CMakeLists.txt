@@ -14,6 +14,7 @@ ament_auto_add_executable(${PROJECT_NAME}
 install(PROGRAMS
   scripts/plot_nvtl.py
   scripts/make_trajectory.py
+  scripts/yaml_overwriter.py
   DESTINATION lib/${PROJECT_NAME})
 
 ament_auto_package(
