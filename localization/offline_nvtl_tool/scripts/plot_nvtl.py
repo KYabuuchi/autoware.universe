@@ -61,8 +61,8 @@ def plot_comprehensive_nvtl(data_frame):
     axis2.grid()
 
 
-def plot_graph(input_path):
-    data_frame = pd.read_csv(input_path)
+def plot_around_nvtl_graph(nvtl_csv_path: str):
+    data_frame = pd.read_csv(nvtl_csv_path)
 
     fig = plt.figure(figsize=(15, 5))
     axis = [
@@ -114,7 +114,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="nvtl.csv")
     args = parser.parse_args()
-    plot_graph(args.input)
+    plot_around_nvtl_graph(args.input)
 
 
 if __name__ == "__main__":

@@ -60,12 +60,12 @@ OfflineNvtlTool::OfflineNvtlTool()
   objects_marker_pub_ = this->create_publisher<MarkerArray>("objects_marker", 10);
   around_nvtl_pub_ = this->create_publisher<MarkerArray>("around_nvtl", 10);
 
-  const std::string input_rosbag_path = this->declare_parameter<std::string>("input_rosbag_path");
-
   //
+  const std::string input_rosbag_path = this->declare_parameter<std::string>("input_rosbag_path");
   const auto reader = RosbagReader(input_rosbag_path);
   //
-  nvtl_file_ = std::ofstream("nvtl.csv");
+  const std::string output_csv_path = this->declare_parameter<std::string>("output_csv_path");
+  nvtl_file_ = std::ofstream(output_csv_path);
 
   // Create NDT
   const std::string pcd_path = declare_parameter<std::string>("pcd_path");
@@ -115,14 +115,12 @@ OfflineNvtlTool::OfflineNvtlTool()
   };
 
   for (const auto & sensor_and_pose : associated_sensor_and_pose) {
-    const Pose & reference_pose = [ use_ndt_pose = this->use_ndt_pose_, sensor_and_pose ]() -> auto
-    {
+    const Pose & reference_pose = [use_ndt_pose = this->use_ndt_pose_, sensor_and_pose]() -> auto {
       if (use_ndt_pose) {
         return sensor_and_pose.ndt_pose;
       }
       return sensor_and_pose.ekf_pose;
-    }
-    ();
+    }();
 
     pcl::PointCloud<pcl::PointXYZ> cloud_in_base_frame;
     pcl::fromROSMsg(sensor_and_pose.pointcloud, cloud_in_base_frame);

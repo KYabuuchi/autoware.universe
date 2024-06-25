@@ -15,6 +15,8 @@ install(PROGRAMS
   scripts/plot_nvtl.py
   scripts/make_trajectory.py
   scripts/yaml_overwriter.py
+  scripts/offline_nvtl_tool.py
+  scripts/validate.py
   DESTINATION lib/${PROJECT_NAME})
 
 ament_auto_package(

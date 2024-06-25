@@ -4,12 +4,11 @@ import subprocess
 import time
 import threading
 from datetime import datetime
-import yaml_overwriter
+from yaml_overwriter import YamlOverwriter
 
 
-def change_odometry_parameter(args: argparse.Namespace, scale=0.95):
-    # TODO: use yaml_overwriter.py
-    pass
+def change_odometry_parameter(yaml: YamlOverwriter, velocity_scale):
+    yaml.set_velocity_scale(velocity_scale)
 
 
 def launch_autoware(args: argparse.Namespace):
@@ -132,15 +131,20 @@ def main():
     parser.add_argument("sensor_model", help="e.g. sample_sensor_kit")
     parser.add_argument("vehicle_model", help="e.g. sample_vehicle")
     parser.add_argument("vehicle_id", help="")
-    parser.add_argument("--vehicle_velocity_converter_param_path", help="path")
-    parser.add_argument("--imu_corrector_param_path", help="path")
+
+    parser.add_argument("vehicle_velocity_converter_param_path", help="path")
+    parser.add_argument("imu_corrector_param_path", help="path")
     args = parser.parse_args()
+
+    yaml_overwriter = YamlOverwriter(
+        args.vehicle_velocity_converter_param_path, args.imu_corrector_param_path
+    )
 
     process_list = []
     try:
         # Assumes that the user has already sourced the Autoware workspace
         # 1. Change imu/vehicle velocity parameter
-        # change_odometry_parameter(args)
+        change_odometry_parameter(yaml_overwriter, 0.95)
         # 2. Launch Autoware
         process_list.append(launch_autoware(args))
         # 3. Wait for Autoware to be ready
