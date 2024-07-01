@@ -112,9 +112,9 @@ def plot_around_nvtl_graph(nvtl_csv_path: str):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="nvtl.csv")
+    parser.add_argument("score_csv_path", help="nvtl.csv")
     args = parser.parse_args()
-    plot_around_nvtl_graph(args.input)
+    plot_around_nvtl_graph(args.score_csv_path)
 
 
 if __name__ == "__main__":

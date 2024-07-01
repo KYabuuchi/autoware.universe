@@ -47,10 +47,10 @@ def validate_trajectory(nvtl_csv_path: str, enable_plot: bool = False) -> bool:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("input", help="nvtl.csv")
+    parser.add_argument("score_csv_path", help="nvtl.csv")
     args = parser.parse_args()
 
-    is_successed = validate_trajectory(args.input, True)
+    is_successed = validate_trajectory(args.score_csv_path, True)
     if is_successed:
         print("Success")
     else:
