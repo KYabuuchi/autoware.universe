@@ -27,6 +27,7 @@ using DetectedObjects = autoware_perception_msgs::msg::DetectedObjects;
 using PointCloud2 = sensor_msgs::msg::PointCloud2;
 using Pose = geometry_msgs::msg::Pose;
 using PoseCovStamped = geometry_msgs::msg::PoseWithCovarianceStamped;
+using Float32Stamped = tier4_debug_msgs::msg::Float32Stamped;
 }  // namespace
 
 Pose search_nearest_odometry(
@@ -46,13 +47,14 @@ Pose search_nearest_odometry(
   return it->second;
 }
 
-std::vector<PointCloudWithPose> extract_pointcloud_with_pose(const RosbagReader & reader)
+std::vector<SynchronizedData> extract_synchronized_data(const RosbagReader & reader)
 {
   // header.stamp.nanosec -> msg
   std::vector<PointCloud2> point_cloud_vector;
   std::unordered_map<rclcpp::Time, Pose> pose_map;
   std::unordered_map<rclcpp::Time, DetectedObjects> objects_map;
-  std::map<rclcpp::Time, geometry_msgs::msg::Pose> odometry_map;
+  std::unordered_map<rclcpp::Time, Float32Stamped> score_map;
+  std::map<rclcpp::Time, geometry_msgs::msg::Pose> odometry_ordered_map;
 
   // Extract all pose messages
   while (reader.has_next()) {
@@ -66,9 +68,13 @@ std::vector<PointCloudWithPose> extract_pointcloud_with_pose(const RosbagReader 
       const PoseCovStamped pose_cov_stamped = decode_with_type<PoseCovStamped>(msg);
       pose_map.emplace(pose_cov_stamped.header.stamp, pose_cov_stamped.pose.pose);
     }
+    if (msg->topic_name == "/localization/pose_estimator/nearest_voxel_transformation_likelihood") {
+      const Float32Stamped score = decode_with_type<Float32Stamped>(msg);
+      score_map.emplace(score.stamp, score);
+    }
     if (msg->topic_name == "/localization/kinematic_state") {
       const Odometry odometry = decode_with_type<Odometry>(msg);
-      odometry_map.emplace(odometry.header.stamp, odometry.pose.pose);
+      odometry_ordered_map.emplace(odometry.header.stamp, odometry.pose.pose);
     }
     if (msg->topic_name == "/localization/util/downsample/pointcloud") {
       const PointCloud2 point_cloud = decode_with_type<PointCloud2>(msg);
@@ -77,22 +83,29 @@ std::vector<PointCloudWithPose> extract_pointcloud_with_pose(const RosbagReader 
   }
 
   // Associated point cloud with pose
-  std::vector<PointCloudWithPose> point_cloud_with_pose_array;
+  std::vector<SynchronizedData> synchronized_data;
 
   for (const auto & point_cloud : point_cloud_vector) {
     const auto query_stamp = rclcpp::Time(point_cloud.header.stamp);
+    const Pose & odometry_pose = search_nearest_odometry(odometry_ordered_map, query_stamp);
 
-    if (pose_map.find(query_stamp) == pose_map.end()) {
-      continue;
-    }
     if (objects_map.find(query_stamp) == objects_map.end()) {
       continue;
     }
-    const Pose & odometry_pose = search_nearest_odometry(odometry_map, query_stamp);
 
-    point_cloud_with_pose_array.push_back(
-      {point_cloud, pose_map.at(query_stamp), odometry_pose, objects_map.at(query_stamp)});
+    if (score_map.find(query_stamp) == score_map.end()) {
+      continue;
+    }
+
+    std::optional<Pose> ndt_pose = std::nullopt;
+    if (pose_map.find(query_stamp) != pose_map.end()) {
+      ndt_pose = pose_map.at(query_stamp);
+    }
+
+    synchronized_data.push_back(
+      {point_cloud, objects_map.at(query_stamp), score_map.at(query_stamp), odometry_pose,
+       ndt_pose});
   }
 
-  return point_cloud_with_pose_array;
+  return synchronized_data;
 }

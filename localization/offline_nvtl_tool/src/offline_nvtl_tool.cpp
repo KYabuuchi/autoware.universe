@@ -14,6 +14,7 @@
 
 #include "offline_nvtl_tool/offline_nvtl_tool.hpp"
 
+#include "offline_nvtl_tool/availability_checker.hpp"
 #include "offline_nvtl_tool/map_loader.hpp"
 #include "offline_nvtl_tool/ndt_interface.hpp"
 
@@ -87,7 +88,14 @@ OfflineNvtlTool::OfflineNvtlTool()
   }
 
   // Iterate all pose & point cloud
-  const auto associated_sensor_and_pose = extract_pointcloud_with_pose(reader);
+  const auto associated_sensor_and_pose = extract_synchronized_data(reader);
+
+  // (1) check ndt availability
+  std::string error_message{};
+  if (!check_ndt_availability(associated_sensor_and_pose, error_message)) {
+    RCLCPP_ERROR_STREAM(this->get_logger(), error_message);
+    return;
+  }
 
   RCLCPP_INFO_STREAM(this->get_logger(), "Start processing: " << associated_sensor_and_pose.size());
 
@@ -97,12 +105,13 @@ OfflineNvtlTool::OfflineNvtlTool()
     geometry_msgs::msg::PoseStamped pose_stamped_msg;
     pose_stamped_msg.header.stamp = this->get_clock()->now();
     pose_stamped_msg.header.frame_id = "map";
-    pose_stamped_msg.pose = msg.ndt_pose;
+    pose_stamped_msg.pose = msg.ekf_pose;
     tf2_broadcaster_.sendTransform(
       autoware::universe_utils::pose2transform(pose_stamped_msg, "viewer"));
   }
 
-  rclcpp::Rate loop_rate(10);  // 10 fps
+  // 10 fps loop for visualization
+  rclcpp::Rate loop_rate(10);
 
   // Compute normal NVTL
   double max_offsetted_nvtl = 0.0;
@@ -115,12 +124,17 @@ OfflineNvtlTool::OfflineNvtlTool()
   };
 
   for (const auto & sensor_and_pose : associated_sensor_and_pose) {
-    const Pose & reference_pose = [use_ndt_pose = this->use_ndt_pose_, sensor_and_pose]() -> auto {
-      if (use_ndt_pose) {
-        return sensor_and_pose.ndt_pose;
+    // Accuire reference pose
+    Pose reference_pose;
+    if (this->use_ndt_pose_) {
+      if (!sensor_and_pose.ndt_pose.has_value()) {
+        RCLCPP_WARN_STREAM(this->get_logger(), "Failed to get sensor and pose");
+        continue;
       }
-      return sensor_and_pose.ekf_pose;
-    }();
+      reference_pose = sensor_and_pose.ndt_pose.value();
+    } else {
+      reference_pose = sensor_and_pose.ekf_pose;
+    }
 
     pcl::PointCloud<pcl::PointXYZ> cloud_in_base_frame;
     pcl::fromROSMsg(sensor_and_pose.pointcloud, cloud_in_base_frame);
@@ -178,7 +192,7 @@ OfflineNvtlTool::OfflineNvtlTool()
         geometry_msgs::msg::PoseStamped pose_stamped_msg;
         pose_stamped_msg.header.stamp = this->get_clock()->now();
         pose_stamped_msg.header.frame_id = "map";
-        pose_stamped_msg.pose = sensor_and_pose.ndt_pose;
+        pose_stamped_msg.pose = sensor_and_pose.ekf_pose;
         tf2_broadcaster_.sendTransform(
           autoware::universe_utils::pose2transform(pose_stamped_msg, "base_link"));
       }
@@ -209,7 +223,7 @@ OfflineNvtlTool::OfflineNvtlTool()
 }
 
 pcl::PointCloud<pcl::PointXYZ> OfflineNvtlTool::exclude_object_points(
-  const PointCloudWithPose & point_cloud_with_pose) const
+  const SynchronizedData & point_cloud_with_pose) const
 {
   const auto & objects = point_cloud_with_pose.objects;
 

@@ -9,6 +9,7 @@ ament_auto_add_executable(${PROJECT_NAME}
   src/map_loader.cpp
   src/ndt_interface.cpp
   src/topic_synchronizer.cpp
+  src/availability_checker.cpp
 )
 
 install(PROGRAMS

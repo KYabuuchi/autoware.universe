@@ -91,7 +91,7 @@ private:
     objects_marker_pub_->publish(marker_array);
   }
 
-  pcl::PointCloud<pcl::PointXYZ> exclude_object_points(const PointCloudWithPose &) const;
+  pcl::PointCloud<pcl::PointXYZ> exclude_object_points(const SynchronizedData &) const;
 
   PointCloud2 load_map_as_msg(const std::string & pcd_path) const;
 
