@@ -5,13 +5,27 @@ import time
 import threading
 from datetime import datetime
 from yaml_overwriter import YamlOverwriter
+from dataclasses import dataclass
+
+
+@dataclass
+class Arguments:
+    rosbag_path: str
+    map_path: str
+    sensor_model: str
+    vehicle_model: str
+    vehicle_id: str
+    vehicle_velocity_converter_param_path: str
+    imu_corrector_param_path: str
 
 
 def change_odometry_parameter(yaml: YamlOverwriter, velocity_scale):
+    print("change velocity scale: {0}".format(velocity_scale))
     yaml.set_velocity_scale(velocity_scale)
 
 
-def launch_autoware(args: argparse.Namespace):
+def launch_autoware(args: Arguments):
+    print("launch autoware")
     launch_autoware_command = "ros2 launch autoware_launch logging_simulator.launch.xml \
         map_path:={0} \
         vehicle_model:={1}\
@@ -25,7 +39,7 @@ def launch_autoware(args: argparse.Namespace):
         perception:=true\
         planning:=false \
         control:=false".format(
-        args.map, args.vehicle_model, args.vehicle_id, args.sensor_model
+        args.map_path, args.vehicle_model, args.vehicle_id, args.sensor_model
     )
 
     # launch in background
@@ -42,11 +56,7 @@ def wait_for_autoware_ready():
     time.sleep(3)
 
 
-def record_rosbag():
-    # get current time like 2021_01_01-12_00_00
-    formatted_date_time = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
-    recorded_rosbag_path = "/tmp/rosbag2_{0}".format(formatted_date_time)
-
+def record_rosbag(recorded_rosbag_path: str):
     record_rosbag_command = "ros2 bag record -o {0} --use-sim-time\
         /map/pointcloud_map \
         /localization/pose_estimator/pose_with_covariance \
@@ -63,8 +73,8 @@ def record_rosbag():
     return subprocess.Popen(record_rosbag_command, shell=True)
 
 
-def play_rosbag(args: argparse.Namespace):
-    print("play rosbag")
+def play_rosbag(args: Arguments):
+    print("play rosbag: {0}".format(args.rosbag_path))
 
     play_rosbag_command = 'ros2 bag play "{0}" \
          -r 0.10 --clock 200 --topics \
@@ -72,13 +82,16 @@ def play_rosbag(args: argparse.Namespace):
          /sensing/imu/tamagawa/imu_raw \
          /sensing/lidar/top/velodyne_packets \
          /vehicle/status/velocity_status'.format(
-        args.rosbag
+        args.rosbag_path
     )
     print(play_rosbag_command)
 
     subprocess.run(play_rosbag_command, shell=True)
 
     # wait to finish
+
+
+thread_loop = True
 
 
 def embed_rosbag_speed_reset():
@@ -89,7 +102,7 @@ def embed_rosbag_speed_reset():
         'ros2 service call /rosbag2_player/set_rate rosbag2_interfaces/SetRate "rate: 1.0"'
     )
 
-    while True:
+    while thread_loop:
         time.sleep(1)
         echo_result = subprocess.run(
             echo_command, capture_output=True, text=True, shell=True
@@ -107,6 +120,7 @@ def embed_rosbag_speed_reset():
 
 
 def kill_autoware():
+    print("kill autoware")
     subprocess.run("pkill ros", shell=True)
     subprocess.run("pkill rviz", shell=True)
     subprocess.run("pkill aggregator_node", shell=True)
@@ -123,11 +137,71 @@ def kill_autoware():
     )
 
 
-def main():
+def main(
+    rosbag_path,
+    map_path,
+    sensor_model,
+    vehicle_model,
+    vehicle_id,
+    vehicle_velocity_converter_param_path,
+    imu_corrector_param_path,
+    velocity_scale=1.0,
+):
+    # parse arguments
+    print("start making trajectory")
+    args = Arguments(
+        rosbag_path,
+        map_path,
+        sensor_model,
+        vehicle_model,
+        vehicle_id,
+        vehicle_velocity_converter_param_path,
+        imu_corrector_param_path,
+    )
+
+    # create yaml overwriter
+    print("yaml overwriter created")
+    yaml_overwriter = YamlOverwriter(
+        vehicle_velocity_converter_param_path, imu_corrector_param_path
+    )
+
+    # get current time like 2021_01_01-12_00_00
+    formatted_date_time = datetime.now().strftime("%Y_%m_%d-%H_%M_%S")
+    recorded_rosbag_path = "/tmp/rosbag2_{0}".format(formatted_date_time)
+
+    process_list = []
+    try:
+        # Assumes that the user has already sourced the Autoware workspace
+        # 1. Change imu/vehicle velocity parameter
+        change_odometry_parameter(yaml_overwriter, velocity_scale)
+        # 2. Launch Autoware
+        process_list.append(launch_autoware(args))
+        # 3. Wait for Autoware to be ready
+        wait_for_autoware_ready()
+        # 4. Record the localization result to rosbag
+        process_list.append(record_rosbag(recorded_rosbag_path))
+        # 5. Start another thread to reset rosbag playback speed when the localization initialization is complete
+        thread = threading.Thread(target=embed_rosbag_speed_reset)
+        thread.start()
+        # 6. Play rosbag at slow speed (Blocking call)
+        play_rosbag(args)
+        # 7. When rosbag is finished, stop recording and kill autoware
+        print("Success: finish makeing trajectory")
+    except:
+        print("Error: finish making trajectory")
+    finally:
+        thread_loop = False
+        thread.join()
+        kill_autoware()
+
+    return recorded_rosbag_path
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("rosbag", help="path to rosbag")
-    parser.add_argument("map", help="path to map")
+    parser.add_argument("rosbag_path", help="path to rosbag")
+    parser.add_argument("map_path", help="path to map")
     parser.add_argument("sensor_model", help="e.g. sample_sensor_kit")
     parser.add_argument("vehicle_model", help="e.g. sample_vehicle")
     parser.add_argument("vehicle_id", help="")
@@ -136,33 +210,12 @@ def main():
     parser.add_argument("imu_corrector_param_path", help="path")
     args = parser.parse_args()
 
-    yaml_overwriter = YamlOverwriter(
-        args.vehicle_velocity_converter_param_path, args.imu_corrector_param_path
+    main(
+        args.rosbag_path,
+        args.map_path,
+        args.sensor_model,
+        args.vehicle_model,
+        args.vehicle_id,
+        args.vehicle_velocity_converter_param_path,
+        args.imu_corrector_param_path,
     )
-
-    process_list = []
-    try:
-        # Assumes that the user has already sourced the Autoware workspace
-        # 1. Change imu/vehicle velocity parameter
-        change_odometry_parameter(yaml_overwriter, 0.95)
-        # 2. Launch Autoware
-        process_list.append(launch_autoware(args))
-        # 3. Wait for Autoware to be ready
-        wait_for_autoware_ready()
-        # 4. Record the localization result to rosbag
-        process_list.append(record_rosbag())
-        # 5. Start another thread to reset rosbag playback speed when the localization initialization is complete
-        thread = threading.Thread(target=embed_rosbag_speed_reset)
-        thread.start()
-        # 6. Play rosbag at slow speed (Blocking call)
-        play_rosbag(args)
-        # 7. When rosbag is finished, stop recording and kill autoware
-        print("Success: finish all process")
-    except:
-        print("Error: finish all process")
-    finally:
-        kill_autoware()
-
-
-if __name__ == "__main__":
-    main()
