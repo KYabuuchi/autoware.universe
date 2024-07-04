@@ -92,9 +92,11 @@ OfflineNvtlTool::OfflineNvtlTool()
 
   // (1) check ndt availability
   std::string error_message{};
-  if (!check_ndt_availability(associated_sensor_and_pose, error_message)) {
-    RCLCPP_ERROR_STREAM(this->get_logger(), error_message);
-    return;
+  if (use_ndt_pose_) {
+    if (!check_ndt_availability(associated_sensor_and_pose, error_message)) {
+      RCLCPP_ERROR_STREAM(this->get_logger(), error_message);
+      return;
+    }
   }
 
   RCLCPP_INFO_STREAM(this->get_logger(), "Start processing: " << associated_sensor_and_pose.size());
@@ -124,20 +126,21 @@ OfflineNvtlTool::OfflineNvtlTool()
   };
 
   for (const auto & sensor_and_pose : associated_sensor_and_pose) {
+    pcl::PointCloud<pcl::PointXYZ> cloud_in_base_frame;
+    pcl::fromROSMsg(sensor_and_pose.pointcloud, cloud_in_base_frame);
+
     // Accuire reference pose
     Pose reference_pose;
     if (this->use_ndt_pose_) {
       if (!sensor_and_pose.ndt_pose.has_value()) {
-        RCLCPP_WARN_STREAM(this->get_logger(), "Failed to get sensor and pose");
-        continue;
+        RCLCPP_WARN_STREAM(this->get_logger(), "Try to get NDT convergence pose");
+        reference_pose = ndt.get_convergence_pose(cloud_in_base_frame, sensor_and_pose.ekf_pose);
+      } else {
+        reference_pose = sensor_and_pose.ndt_pose.value();
       }
-      reference_pose = sensor_and_pose.ndt_pose.value();
     } else {
       reference_pose = sensor_and_pose.ekf_pose;
     }
-
-    pcl::PointCloud<pcl::PointXYZ> cloud_in_base_frame;
-    pcl::fromROSMsg(sensor_and_pose.pointcloud, cloud_in_base_frame);
 
     const pcl::PointCloud<pcl::PointXYZ> no_dynamic_pointcloud =
       exclude_object_points(sensor_and_pose);

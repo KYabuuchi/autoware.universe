@@ -23,6 +23,10 @@ public:
     const pcl::PointCloud<PointSource> & cloud_in_base_frame,
     const geometry_msgs::msg::Pose & pose_msg, bool use_nvtl) const;
 
+  geometry_msgs::msg::Pose get_convergence_pose(
+    const pcl::PointCloud<PointSource> & cloud_in_base_frame,
+    const geometry_msgs::msg::Pose & pose_msg) const;
+
 private:
   NdtPtrType ndt_ptr_;
 };

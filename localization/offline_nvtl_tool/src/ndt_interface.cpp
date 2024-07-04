@@ -41,3 +41,17 @@ double NdtInterface::get_score(
   }
   return ndt_ptr_->calculateTransformationProbability(cloud_in_map_frame);
 }
+
+geometry_msgs::msg::Pose NdtInterface::get_convergence_pose(
+  const pcl::PointCloud<PointSource> & cloud_in_base_frame,
+  const geometry_msgs::msg::Pose & pose_msg) const
+{
+  const Eigen::Matrix4f map_to_base_matrix = pose_to_matrix4f(pose_msg);
+
+  pcl::PointCloud<PointSource> output_cloud;
+  ndt_ptr_->setInputSource(cloud_in_base_frame.makeShared());
+  ndt_ptr_->align(output_cloud, map_to_base_matrix);
+
+  const pclomp::NdtResult result = ndt_ptr_->getResult();
+  return matrix4f_to_pose(result.pose);
+}
